@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+# sudo apt install xtables-addons-common libtext-csv-xs-perl libmoosex-types-netaddr-ip-perl
+# sudo iptables -A DOCKER-USER -m geoip -p tcp --dport 80 --src-cc KR -j DROP
+
+geoip_mods(){
+    echo "Iptables Modules"
+    echo "-------------------------------------"
+    cat /proc/net/ip_tables_matches
+    echo "-------------------------------------"
+    echo "Module                  Size  Used by"
+    lsmod | grep ^xt_geoip
+}
+
+geoip_update(){
+    cd ${GEOIP_DIR}
+    # /usr/lib/xtables-addons
+    # /usr/libexec/xtables-addons
+    check_root /usr/libexec/xtables-addons/xt_geoip_dl
+    [[ ! -d /usr/share/xt_geoip ]] && mkdir -p /usr/share/xt_geoip
+    check_root /usr/libexec/xtables-addons/xt_geoip_build -s
+    discord_send "GeoIPs have been updated."
+}
+
+geoip_manager(){
+    case "${1}" in
+        "mods")
+            geoip_mods
+            ;;
+        "update")
+            geoip_update
+            ;;
+        *) log E "예시 : ${NAME} geoip [mods|update]" ;;
+    esac
+}

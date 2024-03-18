@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+
+#set -x # debug
+#set -e # abort on errors
+#set -u # abort on unset variables
+
+## Default
+declare -r NAME=$(basename -- "${0}")
+declare -r EXE_DIR=$(dirname -- "${0}")
+
+## Import
+source ${EXE_DIR}/.aider-env
+source ${EXE_DIR}/aider-log
+source ${EXE_DIR}/aider-discord
+
+log(){
+    log_log "${1}" "${2}" "${NAME%.*}"
+}
+
+parse_filename(){
+    local dir name ext
+    dir=$(dirname -- "${1}")
+    name=$(basename -- "${1}")
+    ext="${name##*.}"
+    name="${name%.*}"
+    echo "${dir}|${name}|${ext}"
+}
+
+start_pre(){
+    log D "시작된 명령 : $(echo "${@}")"
+    COMMAND_START_TIME=$(date +%s.%3N)
+}
+
+stop_post(){
+    local elapsed_time
+    log D "걸린 시간   : $(echo "scale=3; $(date +%s.%3N) - ${COMMAND_START_TIME}" | bc) 초"
+}
+
+check_root(){
+    if [[ "${EUID}" -eq 0 ]]; then
+        "${@}"
+        return 0
+    else
+        msg="root 권한으로 실행해 주세요."
+        log E "${msg}"
+        printf "%s\n" "${msg}"
+        return 1
+    fi
+}
+
+check_dsm_package(){
+    if [[ "$(synopkg status ${1} | jq -r .status)" == "running" ]]; then
+        return 0
+    else
+        echo "synocli-misc 패키지가 실행 상태가 아닙니다."
+        return 1
+    fi
+}
+
+join_by(){
+    local d=${1-} f=${2-}
+    if shift 2; then
+        printf %s "$f" "${@/#/$d}"
+    fi
+}
+
+args="${*}"
+start_pre "${args}"
+case "${1}" in
+    discord)
+        shift 1
+        discord_send "${@}"
+        ;;
+    traffic)
+        source ${EXE_DIR}/aider-traffic
+        result="$(traffic_this_month)"
+        log I "${result}"
+        discord_send "${result}"
+        ;;
+    init|geoip|rclone|tailog|plex|dsm|move)
+        mod=${1}
+        shift 1
+        source ${EXE_DIR}/aider-${mod}
+        check_root ${mod}_manager ${@}
+        ;;
+    *) log E "사용법 :
+init
+discord [-n \"{name}\"] \"{message}\"
+traffic
+geoip update | mods
+rlcone metadata {remote:}
+       refresh {remote:} \"{/folder/to/be/refresh\A|/folder/to/be/refresh\B}\"
+       refresh-all
+       jobs
+       jobs-detailed
+       jobs-not-finished
+       jobs-not-finished-old {6} # hours
+       jobs-stop-old {5} # hours
+       jobs-status {1234} # job id
+       rc [commands]
+       rc-mount {remote:} {/mount/path}
+       rc-unmount {/mount/path}
+       rc-unmount-all
+       stats
+       backup
+       rc-start-post
+       rc-stop-post
+       rcd
+tailog {service}
+plex scan \"{/folder/to/be/scanned}\"
+     restart
+     status
+"
+        ;;
+esac
+stop_post "${args}"

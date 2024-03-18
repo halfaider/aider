@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+
+init_set_crontab(){
+    echo -e "${INIT_CRON_JOBS}" | crontab -
+}
+
+init_set_max_watches(){
+    local attempt=0
+    local attempt_max=10
+
+    for i in {1..10}; do
+        if bc --version > /dev/null 2>&1; then
+            break
+        else
+            [[ ${i} -ge 10 ]] && exit 1
+            sleep 5
+        fi
+    done
+
+    log D "Current max_user_watches : $(cat /proc/sys/fs/inotify/max_user_watches)"
+    # 1. Get the total number of directories in use for your media.
+    # 2. Add 32768 to the total number of directories.
+    # 3. Divide by 32768
+    # 4. Add 1 to the integer result.
+    # 5. Multiply by 32768
+    # 6. Use this final result. (integer part only)
+    base=32768
+    max_value=$(echo "scale=2; (((${INIT_TOTAL_FOLDERS} + ${base}) / ${base}) + 1) * ${base}" | bc)
+    max_value=${max_value%.*}
+
+    # Remove any previous s2s_watches_max entries (avoid clutter)
+    sed -ine '/^fs.inotify.max_user_watches.*$/d' /etc/sysctl.conf
+
+    # Oracle default 198724
+    log I "Set max_user_watches: ${max_value}"
+    echo "fs.inotify.max_user_watches = ${max_value}" | tee -a /etc/sysctl.conf  >/dev/null && sysctl -p
+}
+
+init_manager(){
+    case "${1}" in
+        crontab)
+            shift 1
+            init_set_crontab
+            ;;
+        max-watches)
+            shift 1
+            echo "run max-watches"
+            init_set_max_watches
+            ;;
+        startup)
+            shift 1
+            while read -r line; do
+                if [[ ! -z ${line} ]]; then
+                    eval ${line}
+                fi
+            done < <(printf "%s\n" "${INIT_STARTUP}")
+            ;;
+    esac
+}

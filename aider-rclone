@@ -1,0 +1,293 @@
+#!/usr/bin/env bash
+
+rclone_run(){
+    local result
+    result=$(rclone_exec "${@}")
+    rclone_exit_code ${?}
+    log I "$(rclone_print_json "${result}")"
+}
+
+rclone_print_json(){
+    if echo "${@}" | jq -e > /dev/null 2>&1; then
+        echo "${@}" | jq -r
+    else
+        echo "${@}"
+    fi
+}
+
+rclone_exec(){
+    local flags result exit_code
+
+    readarray -t <<<"${@}"
+    flags=("${MAPFILE[@]}")
+    #echo "length: ${#flags[@]}"
+    #for flag in "${flags[@]}"; do
+    #    echo "[${flag}]"
+    #done
+
+    result=$(${RCLONE} --config=${RCLONE_CONFIG} --log-level=${RCLONE_LOG_LEVEL} --log-file=${RCLONE_LOG_FILE} --cache-dir=${HOME}/.cache/rclone "${flags[@]}")
+    exit_code=${?}
+    echo "${result}"
+    return ${exit_code}
+
+    ## 0 LOG_EMERG system is unusable
+    ## 1 LOG_ALERT action must be taken immediately
+    ## 2 LOG_CRIT critical conditions
+    ## 3 LOG_ERR error conditions
+    ## 4 LOG_WARNING warning conditions
+    ## 5 LOG_NOTICE normal, but significant, condition
+    ## 6 LOG_INFO informational message
+    ## 7 LOG_DEBUG debug-level message
+}
+
+rclone_exit_code(){
+    local msg
+    case "${1}" in
+        0) msg="Success" ;;
+        1) msg="Syntax or usage error" ;;
+        2) msg="Error not otherwise categorised" ;;
+        3) msg="Directory not found" ;;
+        4) msg="File not found" ;;
+        5) msg="Temporary error" ;;
+        6) msg="Less serious errors" ;;
+        7) msg="Fatal error" ;;
+        8) msg="Transfer exceeded" ;;
+        9) msg="Operation successful, but no files transferred" ;;
+        *) msg="Unkown exit code : ${1}" ;;
+    esac
+    msg="Rclone exit code : ${1} (${msg})"
+    if (( ${1} > 0 )); then
+        log E "${msg}"
+    else
+        log D "${msg}"
+    fi
+}
+
+rclone_flags_rc(){
+    local flags
+    #flags="rc|--rc-addr=${RCLONE_RC_ADDR}|--rc-user=${RCLONE_RC_USER}|--rc-pass=${RCLONE_RC_PASS}|--timeout=${RCLONE_TIME_OUT}|${@}"
+    flags=("rc" "--rc-addr=${RCLONE_RC_ADDR}" "--rc-user=${RCLONE_RC_USER}" "--rc-pass=${RCLONE_RC_PASS}" "--timeout=${RCLONE_TIME_OUT}" "${@}")
+    for flag in "${flags[@]}"; do
+        echo "${flag}"
+    done
+}
+
+rclone_rc_mount(){
+    local flags fs mountpoint vfsopt
+    fs="${1}"
+    mountpoint="${2}"
+    if [[ "${fs}" == "sjva:" ]]; then
+        #vfsopt='{"CacheMaxAge":7776000000000000,"CacheMaxSize":53687091200,"CacheMode":3,"CachePollInterval":300000000000,"CaseInsensitive":false,"ChunkSize":33554432,"ChunkSizeLimit":1073741824,"DirCacheTime":2592000000000000,"NoChecksum":true,"NoModTime":true,"NoSeek":true,"PollInterval":0,"ReadAhead":67108864}'
+        vfsopt='{"CacheMaxSize":53687091200,"CacheMode":3,"NoChecksum":true,"NoModTime":true,"NoSeek":true,"DirCacheTime":5184000000000000,"PollInterval":0,"ChunkSize":33554432,"ChunkSizeLimit":1073741824}'
+    else
+        vfsopt="${RCLONE_RC_MOUNT_FLAGS_VFSOPT}"
+    fi
+    if [[ ! -d "${mountpoint}" ]]; then
+        log I "Make the mount folder: ${mountpoint}"
+        mkdir -p "${mountpoint}"
+    fi
+    if [[ -d "${mountpoint}" ]]; then
+        flags=("mount/mount" "fs=${fs}" "mountPoint=${mountpoint}" "mountOpt=${RCLONE_RC_MOUNT_FLAGS_MOUNTOPT}" "vfsOpt=${vfsopt}")
+        printf "$(rclone_exec "$(rclone_flags_rc "${flags[@]}")")"
+    else
+        log E "The mount point is not exists: ${mountpoint}"
+    fi
+}
+
+rclone_rc_unmount(){
+    local flags mountpoint
+    mountpoint="${1}"
+    case "${mountpoint}" in
+        "all")
+            flags="mount/unmountall"
+            ;;
+        *)
+            flags=("mount/unmount" "mountPoint=${mountpoint}")
+            ;;
+    esac
+    printf "$(rclone_exec "$(rclone_flags_rc "${flags[@]}")")"
+}
+
+rclone_flags_rc_vfs_refresh() {
+    local flags counter remote dirs
+    remote=${1}
+    shift 1
+    flags=("vfs/refresh" "fs=${remote}" "recursive=true" "--fast-list")
+    counter=1
+    for dir in "${@}"; do
+        flags+=("dir${counter}=${dir}")
+        (( counter++ ))
+    done
+    #flags="vfs/refresh|fs=${remote}:|recursive=true|--fast-list"
+    #IFS="|" read -r -a dirs <<< "${@}"
+    #counter=1
+    #for dir in "${dirs[@]}"; do
+    #    flags+="|dir${counter}=${dir}"
+    #    (( counter++ ))
+    #done
+    echo "$(rclone_flags_rc "${flags[@]}")"
+}
+
+rclone_rc_job_list(){
+    printf "$(rclone_exec "$(rclone_flags_rc job/list)")"
+}
+
+rclone_rc_job_status(){
+    printf "$(rclone_exec "$(rclone_flags_rc "job/status" "jobid=${1}")")"
+}
+
+rclone_rc_job_stop(){
+    local result
+    # it returns {}
+    result="$(rclone_exec "$(rclone_flags_rc "job/stop" "jobid=${1}")")"
+}
+
+rclone_rc_vfs_stats(){
+    printf "$(rclone_exec "$(rclone_flags_rc "vfs/stats" "fs=${1}")")"
+}
+
+rclone_rc_job_list_detailed(){
+    local status start_time elapsed_hour
+    while read jobid; do
+        status="$(rclone_rc_job_status ${jobid})"
+        case "${1}" in
+            "not-finished"|"not-finished-old"|"stop-old")
+                [[ "$(printf "${status}" | jq '.finished')" == "true" ]] && continue
+                case "${1}" in
+                    *"-old")
+                        start_time=$(printf "${status}" | jq -r '.startTime')
+                        [[ ${start_time} ]] || continue
+                        elapsed_hour=$(printf "scale=0; ( $(date +%s) - $(date --date=${start_time} +%s) ) / 3600" | bc)
+                        if [[ ${elapsed_hour} -gt ${2:-10} ]]; then
+                            printf "${elapsed_hour} hours passed - $(printf ${status} | jq -cr)\n"
+                            case "${1}" in
+                                "stop-old")
+                                    printf "Stop ${jobid}\n"
+                                    rclone_rc_job_stop ${jobid}
+                                    ;;
+                            esac
+                        fi
+                        ;;
+                    *) printf "${status}\n" ;;
+                esac
+                ;;
+            *) printf "${status}\n" ;;
+        esac
+    done < <(rclone_rc_job_list | jq ".jobids[]")
+}
+
+rclone_service_start_post(){
+    log I "Rclone Remote Control deamon starts..."
+    sleep 10
+    for mount in ${RCLONE_MOUNTS}; do
+        rclone_rc_mount "${mount%%:*}:" "${mount##*:}"
+    done
+}
+
+rclone_service_stop_post(){
+    log I "Rclone Remote Control deamon stops..."
+    for mount in ${RCLONE_MOUNTS}; do
+        rclone_rc_unmount "${mount##*:}"
+    done
+}
+
+rclone_rcd(){
+    flags="rcd
+--rc-addr=${RCLONE_RC_ADDR}
+--rc-htpasswd=${HOME}/rclone/.rclone-htpasswd
+--rc-enable-metrics
+--rc-serve
+--rc-web-gui
+--rc-web-gui-update
+--rc-web-gui-no-open-browser"
+    rclone_exec "${flags[@]}"
+}
+
+rclone_manager(){
+    case "${1}" in
+        "metadata")
+            shift 1
+            result="$(rclone_rc_vfs_stats ${1})"
+            log I "Rclone metadata in memory : $(printf "${result}" | jq -c '.metadataCache')"
+            printf "%s" "${result}" | jq -c '.metadataCache'
+            ;;
+        "refresh")
+            shift 1
+            remote="${1}"
+            flags="$(rclone_flags_rc_vfs_refresh "${remote}" "${@}")"
+            rclone_exec "$flags"
+            ;;
+        "refresh-all")
+            shift 1
+            flags="$(rclone_flags_rc_vfs_refresh ${1})"
+            flags+=$'\n'"async=true"
+            rclone_exec "${flags[@]}"
+            ;;
+        "jobs")
+            rclone_print_json "$(rclone_rc_job_list)"
+            ;;
+        "jobs-detailed")
+            rclone_print_json "$(rclone_rc_job_list_detailed)"
+            ;;
+        "jobs-not-finished")
+            rclone_print_json "$(rclone_rc_job_list_detailed not-finished)"
+            ;;
+        "jobs-not-finished-old")
+            shift 1
+            rclone_rc_job_list_detailed not-finished-old ${1}
+            ;;
+        "jobs-stop-old")
+            shift 1
+            rclone_rc_job_list_detailed stop-old ${1}
+            ;;
+        "jobs-status")
+            shift 1
+            rclone_print_json "$(rclone_rc_job_status ${1})"
+            ;;
+        "rc")
+            shift 1
+            rclone_exec "$(rclone_flags_rc "${@}")"
+            ;;
+        "rc-mount")
+            shift 1
+            rclone_rc_mount "${1}" "${2}"
+            ;;
+        "rc-unmount")
+            shift 1
+            rclone_rc_unmount "${1}"
+            ;;
+        "rc-unmount-all")
+            rclone_rc_unmount all
+            ;;
+        "stats")
+            rclone_exec "$(rclone_flags_rc core/stats)"
+            ;;
+        "backup")
+            flags=("copy" "${RCLONE_BACKUP_SOURCE}" "${RCLONE_BACKUP_TARGET}" "--copy-links" "--create-empty-src-dirs" "--filter-from=${RCLONE_FILTER_BACKUP}" "--ignore-checksum" "--ignore-size")
+            last -f /var/log/btmp | tee ${HOME}/logs/ssh.failed.log
+            last -f /var/log/wtmp | tee ${HOME}/logs/ssh.success.log
+            rclone_exec "$(printf "%s\n" "${flags[@]}")"
+            ;;
+        "rc-start-post")
+            # aider.sh rclone start-post
+            rclone_service_start_post
+            ;;
+        "rc-stop-post")
+            # aider.sh rclone stop-post
+            rclone_service_stop_post
+            ;;
+        "rcd")
+            # aider.sh rclone rcd
+            rclone_rcd
+            ;;
+        "fscache")
+            # This clears the fs cache. This is where remotes created from backends are cached for a short while to make repeated rc calls more efficient.
+            # If you change the parameters of a backend then you may want to call this to clear an existing remote out of the cache before re-creating it.
+            rclone_exec "$(rclone_flags_rc fscache/clear)"
+            ;;
+        *)
+            # aider.sh rclone lsd remote:
+            rclone_exec "$(printf "%s\n" "${@}")"
+            ;;
+    esac
+}

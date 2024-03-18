@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+
+plex_get_section_by_dir(){
+    local sections path
+    sections=$(curl -H "accept: application/json" "${PLEX_URL}/library/sections/?X-Plex-Token=${PLEX_TOKEN}")
+    while read path; do
+        [[ "${1}" =~ ${path} ]] && break
+    done < <(echo ${sections} | jq -r .MediaContainer.Directory[].Location[].path)
+    echo ${sections} | jq -r ".MediaContainer.Directory[] | select(.Location[].path==\"${path}\") | .key"
+
+}
+
+plex_scan(){
+    local target_dir section
+    [[ -e "${1}" ]] || {
+        log E "존재하지 않는 경로 : ${1}"
+        return 1
+    }
+
+    target_dir="${1}"
+    [[ -f "${1}" ]] && target_dir=$(dirname "${1}")
+    log D "스캔할 경로 : ${target_dir}"
+
+    section=$(plex_get_section_by_dir "${target_dir}")
+    [[ ${section} ]] || {
+        log E "section 번호를 찾을 수 없음 : ${target_dir}"
+        return 1
+    }
+
+    # bash에서 사용하는 특수문자(예: [] ...)가 url에 포함되어 오류 발생할 경우 --globoff
+    curl -G --globoff "${PLEX_URL}/library/sections/${section}/refresh" \
+        --data-urlencode "path=${target_dir}" \
+        -d "X-Plex-Token=${PLEX_TOKEN}"
+}
+
+plex_clean_cache(){
+    local photo_transcoder="${PLEX_MEDIA_SERVER_APPLICATION_SUPPORT_DIR}/Plex Media Server/Cache/PhotoTranscoder"
+    echo
+    rm -rfv "${photo_transcoder}"/**
+}
+
+plex_manager(){
+    case "${1}" in
+        "scan")
+            shift 1
+            plex_scan "${*}"
+            ;;
+        "restart")
+            ${PLEX_LAUNCHER} stop
+            ${PLEX_LAUNCHER} start
+            ;;
+        "status")
+            ${PLEX_LAUNCHER} status
+            ;;
+        "clean")
+            plex_clean_cache
+            ;;
+    esac
+}

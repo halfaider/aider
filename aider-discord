@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+discord_send(){
+    case "${1}" in
+        "-n")
+            shift 1
+            username="${1}"
+            content="${2}"
+            ;;
+        *)
+            username="${NAME}@$(hostname)"
+            content="${1}"
+            ;;
+    esac
+
+    curl -X POST "${DISCORD_WEBHOOK}" \
+         -H "Content-Type: application/json" \
+         -d "{\"username\": \"${username}\", \"content\":\"${1}\"}"
+}

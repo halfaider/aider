@@ -1,0 +1,427 @@
+#!/usr/bin/env bash
+
+source /etc/profile # 언어 설정 등을 위해 시스템 기본 프로파일 로딩
+
+LOG_FILE_PATH= # 로그 파일 저장 위치
+
+FIND_MAX_DEPTH=2 # 검색할 서브 폴더 깊이
+FIND_REGEX_INCLUDE=".*" # 찾을 파일명 정규식
+#FIND_REGEX_INCLUDE="^.*\.\(mp4\|srt\|smi\|mkv\)$"
+FIND_REGEX_EXCLUDE="^.*@eaDir.*\|.*\.\(part\|exe\|txt\)$" # 제외할 파일명 정규식
+
+PARSE_SERIES=false # 파일명에서 시리즈 정보 추출
+PARSE_TAILING=false # 파일명 끝에 시리즈 정보 추가 여부
+PARSE_APPLY=false # 파일 변경 자동 적용 여부 (prompt 입력 없이 적용하고 싶을 경우 true)
+
+function set_preset(){
+    # Preset for scheduler
+    FIND_REGEX_INCLUDE=".*"
+    FIND_MAX_DEPTH=3
+    log_to_file # 로그를 파일에 저장
+    PARSE_APPLY=true # 변경사항을 prompt로 묻지 않고 적용
+}
+
+# 파일명 키워드 제거
+PARSE_SUBSTITUTION_REGEX[0]="s/^(\[.*\] ?|\(.*\) ?|채널A |JTBC.*특별기획 )//"
+PARSE_SUBSTITUTION_REGEX[1]="s/^(설 기획 |추석 특집 |추석 기획 |설 특집 )//"
+PARSE_SUBSTITUTION_REGEX[2]="s/([\. ]첫회[\. ]|[\. ]최종[\. ]|[\. ]최종회[\. ]|[\. ]첫방송[\. ])//"
+
+# 방송날짜 6자리/8자리
+PARSE_AIRDATE_REGEX[0]="s/^.*(202[0-9](0[1-9]|1[012])(0[1-9]|[12][0-9]|3[01])).*$/\1/p"
+PARSE_AIRDATE_REGEX[1]="s/^.*(2[0-9](0[1-9]|1[012])(0[1-9]|[12][0-9]|3[01])).*$/\1/p"
+
+# 시즌 번호로 추측되는 숫자
+PARSE_SEASON_REGEX[0]="s/.*[ [:punct:]][sS]([0-9]{2})[^0-9].*/\1/p"
+PARSE_SEASON_REGEX[1]="s/.*[ [:punct:]]시즌[ [:punct:]]?([2-9]|[12][0-9])[ [:punct:]].*/\1/p"
+PARSE_SEASON_REGEX[2]="s/.*[\w가-힣 ]([2-9])[ [:punct:]][eE][0-9]{2,4}.*/\1/p"
+
+# 에피소드 번호로 추측되는 숫자
+PARSE_EPISODE_REGEX[0]="s/.*[eE]([0-9]{2,4})[ [:punct:]].*/\1/p"
+
+function user_season(){
+    local filename="$1" season="$2" episode="$3" airdate="$4"
+    # 특별 처리
+    if [[ $filename =~ "꼬리에 꼬리를 무는 그날 이야기" ]]; then
+        season_airdate=(20210311 20211021)
+        IFS=$'\n' season_airdate=($(sort -nr <<<"${season_airdate[*]}")); unset IFS
+        max_season=$(( ${#season_airdate[@]} + 1 ))
+        for s_air in ${season_airdate[@]}
+        do
+            if [[ $airdate -ge $s_air ]]; then
+                season=$(add_leading_number $max_season 0 1)
+                break;
+            fi
+            max_season=$(( $max_season - 1 ))
+        done
+        log D "Special season for 꼬리에 꼬리를... : $season"
+    fi
+    echo $season
+}
+
+
+# 간이 로그 구현
+declare -A LEVEL=([D]=DEBUG [I]=INFO [W]=WARN [E]=ERROR [S]=SEVERE [C]=CRITICAL)
+declare -A PRIORITIES=([DEBUG]=0 [INFO]=1 [WARN]=2 [ERROR]=3 [SEVERE]=4 [CRITICAL]=5)
+
+function log(){
+    local l=${LEVEL[$1]}
+    [[ ${PRIORITIES[$l]} ]] || return 1
+    (( ${PRIORITIES[$l]} < ${PRIORITIES[$LOG_LEVEL]} )) && return 2
+    echo -e "[$(get_now)][$l]" "$2" >&2
+}
+
+function log_to_file(){
+    if ! touch "$LOG_FILE_PATH"; then
+        exit 1
+    fi
+    if ! exec 2>> "$LOG_FILE_PATH"; then
+        exit 1
+    fi
+}
+
+function get_now(){
+    echo "$(TZ='Asia/Seoul' date '+%Y-%m-%d %T%z')"
+}
+
+function parse_filename(){
+    local dir name ext
+    dir=$(dirname -- "$1")
+    name=$(basename -- "$1")
+    ext="${name##*.}"
+    name="${name%.*}"
+    echo "$dir|$name|$ext"
+}
+
+function manage(){
+    log I "Finding files..."
+    target_files=()
+    while IFS= read -r -d $'\0'; do
+        target_files+=("$REPLY")
+        log D "$REPLY"
+    done < <(find "$FIND_TARGET_PATH" -maxdepth $FIND_MAX_DEPTH -type f -regex "$FIND_REGEX_INCLUDE" -not -regex "$FIND_REGEX_EXCLUDE" -print0)
+    total=${#target_files[@]}
+    log D "$total file(s) have been found."
+    [[ "$total" -le 0 ]] && exit 0
+
+    result_files=()
+    for i in "${!target_files[@]}"; do
+        IFS="|" read -a path < <(parse_filename "${target_files[$i]}")
+
+        if [[ -n "$PARSE_PRUNE_BY_DATE" ]]; then
+            log D "Checking airdate... '${target_files[$i]}'"
+            if [[ "$(prune "${path[1]}" "$PARSE_PRUNE_BY_DATE")" = "true" ]]; then
+                log D "${path[1]} will be pruned."
+                result="$PARSE_PRUNE_MOVE_TO_PATH/${path[1]}.${path[2]}"
+            else
+                result=
+            fi
+        else
+            if [[ $PARSE_SERIES = true ]]; then
+                log I "Parsing file name... '${target_files[$i]}'"
+                path[1]=$(parse "${path[1]}")
+            fi
+            if [[ -e "$PARSE_MOVE_TO_PATH" ]]; then
+                result="$PARSE_MOVE_TO_PATH/${path[1]}.${path[2]}"
+            else
+                result="${path[0]}/${path[1]}.${path[2]}"
+            fi
+        fi
+        [[ -n "$result" ]] && [[ "${target_files[$i]}" != "$result" ]] && result_files[$i]="$result"
+    done
+
+    log I "Result..."
+    for i in "${!result_files[@]}"; do
+        log I "   '${target_files[$i]}'"
+        log I "-> '${result_files[$i]}'"
+    done
+    result_total=${#result_files[@]}
+    log I "$result_total of $total file(s) would be renamed or moved."
+
+    log I "Executing..."
+    if [[ $result_total -gt 0 ]]; then
+        [[ $PARSE_APPLY = false ]] && [[ -z "$LOG_FILE_PATH" ]] && PARSE_APPLY=$(check_applicable)
+        if [[ $PARSE_APPLY = true ]]; then
+            for i in "${!result_files[@]}"; do
+                log I "$(mv --backup=t -v "${target_files[$i]}" "${result_files[$i]}" 2>&1)"
+            done
+            discord_send "Moved : ${result_files[@]}"
+        else
+            log I "Executing is canceled."
+        fi
+    else
+        log I "There are no changes to be executed."
+    fi
+}
+
+function prune(){
+    local filename="$1" asof="$2" return=false
+    airdate=$(get_airdate "$filename")
+    if [[ -n "$airdate" ]] && [[ $(date -d "$airdate" +%s) -lt $(date -d "$asof" +%s) ]]; then
+        return=true
+    fi
+    echo "$return"
+}
+
+function check_applicable(){
+    if [[ $PARSE_APPLY != true ]]; then
+        while true; do
+            read -p "Do you want to apply it? (yes/no) : " opt
+        #PS3="Do you want to apply it?"$'\n'"Select the number : "
+        #select opt in Yes No; do
+            case $opt in
+                Yes|yes)
+                    PARSE_APPLY=true
+                    break
+                    ;;
+                *)
+                    PARSE_APPLY=false
+                    break
+                    ;;
+            esac
+        done
+    fi
+    log D "Input : [$opt]"
+    echo "$PARSE_APPLY"
+}
+
+function check_movable(){
+    local file_path="$1" count=1
+    IFS="|" read -a path < <(parse_filename "$file_path")
+    while [[ -e "$file_path" ]]
+    do
+        log W "The file already exists : '$file_path'"
+        path[1]=$(echo "${path[1]}" | sed -r 's/(\.\[[0-9]{1,3}\] ?)$//')
+        path[1]="${path[1]}.[$count]"
+        file_path="${path[0]}/${path[1]}.${path[2]}"
+        count=$(expr $count + 1)
+        if [[ $count -gt 100 ]]; then
+            log E "Too many files that have same name : [$count]"
+            file_path=
+            break
+        fi
+    done
+    echo "$file_path"
+}
+
+function parse(){
+    local filename="$1"
+    log D "Parsing series file name..."
+    filename="$(parse_series_filename "$filename")"
+    log D "Substitution..."
+    filename="$(parse_substitution "$filename")"
+    echo "$filename"
+}
+
+function parse_substitution(){
+    local filename="$1"
+    for i in "${!PARSE_SUBSTITUTION_REGEX[@]}"
+    do
+        new_name=$(echo "$filename" | sed -r "${PARSE_SUBSTITUTION_REGEX[$i]}")
+        [[ "$filename" != "$new_name" ]] && {
+            filename="$new_name"
+            log D "Substitution [$i]: $filename"
+        }
+    done
+    echo "$filename"
+}
+
+function parse_series_filename(){
+    local filename="$1" episode season airdate
+    episode=$(get_episode "$filename")
+    if [[ -n "$episode" ]]; then
+        log D "Episode number : $episode"
+        airdate=$(get_airdate "$filename")
+        log D "Airdate: $airdate"
+
+        season=$(get_season "$filename")
+        log D "Season: $season"
+
+        filename="$(parse_series_filename_tailing "$filename" "$season" "$episode" "$airdate")"
+    else
+        log I "No episode has been found."
+    fi
+    echo "$filename"
+}
+
+function parse_series_filename_tailing(){
+    local filename="$1" season="$2" episode="$3" airdate="$4"
+
+    # 특별 처리
+    season=$(user_season "$filename" "$season" "$episode" "$airdate")
+
+    if [[ "$PARSE_TAILING" = "true" ]]; then
+        trailing="S$season"E"$episode$([[ -n "$airdate" ]] && echo ".$airdate")"
+        log D "Trailing info.: $trailing"
+        test=$(echo "$filename" | sed -r -n "s/.*($trailing).*/\1/p")
+        if [[ "$trailing" = "$test" ]]; then
+            log W "The filename already has trailing info."
+        else
+            filename="$filename.$trailing"
+        fi
+    fi
+    echo "$filename"
+}
+
+function get_regex_match(){
+    local string="$1" regex_array="${2}[@]" match
+    #eval regex_array=\( \${${2}[@]} \)
+    for regex in "${!regex_array}"
+    do
+        match=$(echo $string | sed -r -n "$regex")
+        [[ -n "$match" ]] && break
+    done
+    echo "$match"
+}
+
+function add_leading_number(){
+    echo "$(echo $1 | sed -r "s/\<[0-9]{$3}\>/$2&/")"
+}
+
+function get_airdate(){
+    local filename="$1"
+    airdate=$(get_regex_match "$filename" "PARSE_AIRDATE_REGEX")
+    [[ -n $airdate ]] && airdate=$(add_leading_number $airdate 20 6)
+    echo "$airdate"
+}
+
+function get_season(){
+    local filename="$1"
+    season=$(get_regex_match "$filename" "PARSE_SEASON_REGEX")
+    if [[ -n $season ]]; then
+        season=$(add_leading_number $season 0 1)
+    else
+        log D "No season info. has been found. Set 01."
+        season=01
+    fi
+    echo "$season"
+}
+
+function get_episode(){
+    local filename="$1"
+    episode=$(get_regex_match "$filename" "PARSE_EPISODE_REGEX")
+    echo "$episode"
+}
+
+function exit_if_not_exists(){
+    if [[ ! -e "$1" ]]; then
+        log E "No directory exists : \"$1\""
+        print_usage
+        exit 1
+    fi
+}
+
+PREFIX="    "
+function print_usage(){
+    echo
+    echo "$PREFIX Usage: $command PATH [MOVE-PATH] [--preset -r REGEX -s -t -l LOG-PATH --maxdepth INTEGER --prune-date DATE --prune-move-to PRUNE-MOVE-PATH]"
+    echo
+    echo "$PREFIX PATH                              대상 폴더 (필수)"
+    echo "$PREFIX MOVE-PATH                         이동 폴더 (기본값=대상 폴더)"
+    echo "$PREFIX OPTION  -s                        파일명에서 시즌/에피소드/방송일자 정보를 추출"
+    echo "$PREFIX         -t                        시즌/에피소드/방송일자 정보를 파일명 뒤에 추가"
+    echo "$PREFIX         -l [FILE]                 로그파일 경로"
+    echo "$PREFIX         --include [REGEX]         찾을 파일명에 사용할 정규표현식"
+    echo "$PREFIX         --exclude [REGEX]         찾을 파일명에 사용할 정규표현식"
+    echo "$PREFIX         --maxdepth [INTEGER]      서브 폴더 검색 깊이"
+    echo "$PREFIX         --prune-date [DATE]       파일명의 날짜보다 오래된 파일 필터링"
+    echo "$PREFIX         --prune-move-to [PATH]    필터링 된 파일을 이동시킬 폴더"
+    echo "$PREFIX         --preset                  미리 설정한 옵션으로 실행"
+    echo
+    echo "$PREFIX   e.g: $NAME PATH /path/to/be/checked --preset -ts"
+    echo "$PREFIX   e.g: $NAME PATH /path/to/be/checked -t --maxdepth 2"
+    echo "$PREFIX   e.g: $NAME PATH /path/to/be/checked -l /path/to/file.log -maxdepth 3"
+    echo "$PREFIX   e.g: $NAME PATH /path/to/be/checked -l /path/to/file.log -maxdepth 3 --include '.*\.mp4$' --exclude '^.*@eaDir.*\|.*\.\(part\|exe\|txt\)$'"
+    echo "$PREFIX   e.g: $NAME PATH /path/to/be/checked --prune-date 20210101 --prune-move-to /path/to/move/files/"
+    echo
+}
+
+opts=$(getopt -o l:sth -l include:,exclude:,maxdepth:,prune-date:,prune-move-to:,preset,help -n "$NAME" -- "$@")
+if [ $? != 0 ]; then
+    print_usage
+    exit 1
+fi
+
+eval set -- "$opts"
+#echo "$opts"
+while true; do
+    case "$1" in
+        -l)
+            LOG_FILE_PATH="${2%/}"
+            log_to_file
+            shift 2
+            ;;
+        --include)
+            FIND_REGEX_INCLUDE="$2"
+            shift 2
+            ;;
+        --exclude)
+            FIND_REGEX_EXCLUDE="$2"
+            shift 2
+            ;;
+        --maxdepth)
+            FIND_MAX_DEPTH=$2
+            shift 2
+            ;;
+        -s)
+            PARSE_SERIES=true
+            shift 1
+            ;;
+        -t)
+            PARSE_TAILING=true
+            shift 1
+            ;;
+        --prune-date)
+            PARSE_PRUNE_BY_DATE=$2
+            shift 2
+            ;;
+        --prune-move-to)
+            PARSE_PRUNE_MOVE_TO_PATH="${2%/}"
+            shift 2
+            ;;
+        --preset)
+            PARSE_PRESET=true
+            shift 1
+            ;;
+        --help|-h)
+            print_usage
+            exit 0
+            ;;
+        --)
+            shift 1
+            FIND_TARGET_PATH="${1%/}"
+			exit_if_not_exists "$FIND_TARGET_PATH"
+			if [[ -n "$2" ]]; then
+			    PARSE_MOVE_TO_PATH="${2%/}"
+                exit_if_not_exists "$PARSE_MOVE_TO_PATH"
+			else
+			    PARSE_MOVE_TO_PATH=
+			fi
+			shift 2
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+if [[ -n "$PARSE_PRUNE_BY_DATE" ]]; then
+    exit_if_not_exists "$PARSE_PRUNE_MOVE_TO_PATH"
+fi
+
+if [[ "$PARSE_PRESET" = true ]]; then
+    set_preset
+fi
+
+log D "Find path : $FIND_TARGET_PATH"
+log D "Move path : $PARSE_MOVE_TO_PATH"
+log D "Parsing series : $PARSE_SERIES"
+log D "Tailing info. : $PARSE_TAILING"
+log D "Apply after parsing : $PARSE_APPLY"
+
+if pidof -o %PPID -x "$0" >/dev/null 2>&1; then
+    log E "Already running."
+    exit 1
+fi
+
+# run
+manage

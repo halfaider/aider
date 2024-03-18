@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+
+# aider
+declare -r HOME=/home/ubuntu
+declare COMMAND_START_TIME=""
+
+# aider-discord
+declare -r DISCORD_WEBHOOK="https://discord.com/api/webhooks/..."
+
+# aider-geoip
+declare -r GEOIP_DIR=${HOME}/geoip
+
+# aider-init
+declare -r INIT_CRON_JOBS='
+@reboot /home/ubuntu/bin/aider init startup
+5 4 * * 4 /home/ubuntu/bin/aider geoip update
+22 */4 * * * /home/ubuntu/bin/aider plex clean
+'
+declare -r INIT_TOTAL_FOLDERS=100000
+declare -r INIT_STARTUP="
+/home/ubuntu/bin/aider init max-watches
+/home/ubuntu/bin/aider init crontab
+"
+
+# aider-log
+declare -r LOG_DIR="${HOME}/logs/"
+declare -r LOG_FILE="${LOG_DIR}/${NAME%.*}.log"
+declare -ru LOG_LEVEL="debug"
+
+# aider-plex
+declare -r PLEX_MEDIA_SERVER_APPLICATION_SUPPORT_DIR=/volume1/PlexMediaServer/AppData
+declare -r PLEX_LD_LIBRARY_PATH=/var/packages/PlexMediaServer/target:/var/packages/PlexMediaServer/target/lib
+declare -r PLEX_URL="https://plex:32400"
+declare -r PLEX_TOKEN=""
+declare -r PLEX_LAUNCHER=/var/packages/PlexMediaServer/scripts/start-stop-status
+
+# aider-rclone
+declare -r RCLONE=/usr/bin/rclone
+declare -r RCLONE_CONFIG=${HOME}/rclone/rclone.conf
+declare -r RCLONE_LOG_FILE=${LOG_DIR}/rclone-${NAME%.*}.log
+declare -ru RCLONE_LOG_LEVEL=INFO
+declare -r RCLONE_CACHE_DIR=${HOME}/.cache
+# 리프레쉬 요청 후 대기 시간이 기본값인 5m을 초과하면 프로세스가 중단됨. 넉넉하게 1시간 잡음.
+declare -r RCLONE_TIME_OUT=12h
+declare -r RCLONE_RC_ADDR=":5572"
+declare -r RCLONE_RC_USER="USER"
+declare -r RCLONE_RC_PASS="PASSWORD"
+declare -r RCLONE_FILTER_BACKUP=${HOME}/rclone/rclone.filter.backup.txt
+declare -r RCLONE_BACKUP_SOURCE=/
+declare -r RCLONE_BACKUP_TARGET=remote:/backup/${HOSTNAME}
+# remote mount 기본 옵션들
+declare -r RCLONE_RC_MOUNT_FLAGS_MOUNTOPT="{\"AllowOther\":true,\"AllowNonEmpty\":true}"
+declare -r RCLONE_RC_MOUNT_FLAGS_VFSOPT='{"CacheMaxSize":5368709120,"CacheMode":3}'
+declare -r RCLONE_MOUNTS="
+remote-1:/mnt/remote-1
+remote-2:/mnt/remote-2
+remote-3:/mnt/remote-3
+"
+
+# aider-tailog
+declare -r BLACK=$(printf '\033[30m')
+declare -r RED=$(printf '\033[31m')
+declare -r GREEN=$(printf '\033[32m')
+declare -r YELLOW=$(printf '\033[33m')
+declare -r BLUE=$(printf '\033[34m')
+declare -r MAGENTA=$(printf '\033[35m')
+declare -r CYAN=$(printf '\033[36m')
+declare -r GRAY=$(printf '\033[37m')
+declare -r LIGHTGRAY=$(printf '\033[90m')
+declare -r LIGHTRED=$(printf '\033[91m')
+declare -r LIGHTGREEN=$(printf '\033[92m')
+declare -r LIGHTYELLOW=$(printf '\033[93m')
+declare -r LIGHTBLUE=$(printf '\033[94m')
+declare -r LIGHTMAGENTA=$(printf '\033[95m')
+declare -r LIGHTCYAN=$(printf '\033[96m')
+declare -r WHITE=$(printf '\033[97m')
+declare -r ENDCOLOR=$(printf '\033[0m')
+declare -r TAILOG_LINES=10
+declare -r TAILOG_TRAEFIK_LOGS=(
+    "${LOG_DIR}/traefik.log"
+    "${LOG_DIR}/traefik.access.log"
+)
+declare -r TAILOG_TRAEFIK_RES=(
+    "-e s/(\\\u0026|%3F)/\&/g"
+    "-e s/%3D/=/g"
+    "-e s/%2F/\//g"
+    "-e s/\"DownstreamStatus\":([0-9]*),/\"DownstreamStatus\":${YELLOW}\1${ENDCOLOR},/"
+    "-e s/\"OriginStatus\":([0-9]*),/\"OriginStatus\":${YELLOW}\1${ENDCOLOR},/"
+    "-e s/\"ClientAddr\":\"([^\"]*)/\"ClientAddr\":\"${YELLOW}\1${ENDCOLOR}/"
+    "-e s/\"RequestAddr\":\"([^\"]*)/\"RequestAddr\":\"${YELLOW}\1${ENDCOLOR}/"
+    "-e s/\"ServiceName\":\"([^\"]*)/\"ServiceName\":\"${YELLOW}\1${ENDCOLOR}/"
+    "-e s/\"RequestMethod\":\"([^\"]*)/\"RequestMethod\":\"${YELLOW}\1${ENDCOLOR}/"
+    "-e s/\"RequestScheme\":\"([^\"]*)/\"RequestScheme\":\"${YELLOW}\1${ENDCOLOR}/"
+    "-e s/(playbackTime=[0-9]+)/${YELLOW}\1${ENDCOLOR}/"
+    "-e s/(state=[^\&]*)/${YELLOW}\1${ENDCOLOR}/"
+    "-e s/(time=[0-9]+)/${YELLOW}\1${ENDCOLOR}/"
+    "-e s/X-Plex-Client-Identifier=([^\&]+)/X-Plex-Client-Identifier=${YELLOW}\1${ENDCOLOR}/"
+    "-e s/X-Plex-Token=([^\&\"]+)/X-Plex-Token=${YELLOW}REDACTED${ENDCOLOR}/g"
+    "-e s/level=debug/level=${LIGHTGRAY}debug${ENDCOLOR}/"
+    "-e s/level=error/level=${RED}error${ENDCOLOR}/"
+)
+declare -r TAILOG_NGINX_LOGS=(
+    "${LOG_DIR}/nginx.access.log"
+    "${LOG_DIR}/nginx.error.log"
+)
+declare -r TAILOG_NGINX_RES=(
+    "-e s/ ([0-9]{3}) ([0-9]+) / ${YELLOW}\1${ENDCOLOR} \2 /"
+    "-e s/\[debug\]/\[${LIGHTGRAY}debug${ENDCOLOR}\]/"
+    "-e s/\[error\]/\[${RED}error${ENDCOLOR}\]/"
+)
+declare -r TAILOG_FAIL2BAN_LOGS=(
+    "${LOG_DIR}/fail2ban.log"
+)
+declare -r TAILOG_FAIL2BAN_RES=(
+    "-e s/ INFO  / ${GRAY}INFO${ENDCOLOR}  /"
+    "-e s/ ERROR  / ${LIGHTGRAY}ERROR${ENDCOLOR}  /"
+)
+declare -r TAILOG_AUTHELIA_LOGS=(
+    ${LOG_DIR}/authelia*.log
+)
+declare -r TAILOG_AUTHELIA_RES=(
+)
+declare -r TAILOG_PLEX_LOGS=(
+    "${PLEX_MEDIA_SERVER_APPLICATION_SUPPORT_DIR}/Plex Media Server/Logs/Plex Media Server.log"
+    "${PLEX_MEDIA_SERVER_APPLICATION_SUPPORT_DIR}/Plex Media Server/Logs/Plex Media Scanner.log"
+)
+declare -r TAILOG_PLEX_RES=(
+    "-e s/] DEBUG - /] ${LIGHTGRAY}DEBUG${ENDCOLOR} - /"
+    "-e s/] ERROR - /] ${RED}ERROR${ENDCOLOR} - /"
+    "-e s/] WARN - /] ${LIGHTYELLOW}WARN${ENDCOLOR} - /"
+    "-e s/authenticated user ([0-9]+) as (.*)/authenticated user ${YELLOW}\1${ENDCOLOR} as ${YELLOW}\2${ENDCOLOR}/"
+    "-e s/(account |for user )([0-9]*)/\1${YELLOW}\2${ENDCOLOR}/"
+    "-e s/User is (.*) \(ID: ([0-9]+)\)/User is ${YELLOW}\1${ENDCOLOR} (ID: ${YELLOW}\2${ENDCOLOR})/"
+    "-e s/Signed-in Token \(([^ ]+)\)/Signed-in Token (${YELLOW}\1${ENDCOLOR})/"
+    "-e s/X-Forwarded-For: (.*) as remote address/X-Forwarded-For: ${YELLOW}\1${ENDCOLOR} as remote address/"
+    "-e s/Client \[(.*)\]/Client \[${YELLOW}\1${ENDCOLOR}\]/"
+    "-e s/Statistics: \((.*)\) Reporting/Statistics: (${YELLOW}\1${ENDCOLOR}) Reporting/"
+    "-e s/(playbackTime=[0-9]+)/${YELLOW}\1${ENDCOLOR}/"
+    "-e s/(state=[^\&]+)/${YELLOW}\1${ENDCOLOR}/"
+    "-e s/(time=[0-9]+)/${YELLOW}\1${ENDCOLOR}/"
+)
+declare -r TAILOG_FLASKFARM_LOGS=(
+    ${HOME}/docker/volumes/flaskfarm/data/log/*.log
+)
+declare -r TAILOG_FLASKFARM_RES=(
+    "-e s#^(\[.+)DEBUG(.+:[0-9]+\])\s?(.+)\$#\1${LIGHTGRAY}DEBUG${ENDCOLOR}\2 ${LIGHTGRAY}\3${ENDCOLOR}#M"
+    "-e s#^(\[.+)INFO(.+:[0-9]+\])\s?(.+)\$#\1${GREEN}INFO${ENDCOLOR}\2 ${GREEN}\3${ENDCOLOR}#M"
+    "-e s#^(\[.+)WARNING(.+:[0-9]+\])\s?(.+)\$#\1${YELLOW}WARNING${ENDCOLOR}\2 ${YELLOW}\3${ENDCOLOR}#M"
+    "-e s#^(\[.+)ERROR(.+:[0-9]+\])\s?(.+)\$#\1${RED}ERROR${ENDCOLOR}\2 ${RED}\3${ENDCOLOR}#M"
+    "-e s#^(\[.+:\s)DEBUG(/\w+\])\s(.+)\$#\1${LIGHTGRAY}DEBUG${ENDCOLOR}\2 ${LIGHTGRAY}\3${ENDCOLOR}#M"
+    "-e s#^(\[.+:\s)ERROR(/\w+\])\s(.+)\$#\1${RED}ERROR${ENDCOLOR}\2 ${RED}\3${ENDCOLOR}#M"
+    "-e s#^(\[.+:\s)INFO(/\w+\])\s(.+)\$#\1${GRAY}INFO${ENDCOLOR}\2 ${GRAY}\3${ENDCOLOR}#M"
+    "-e s#^(\[.+:\s)WARNING(/\w+\])\s(.+)\$#\1${YELLOW}WARNING${ENDCOLOR}\2 ${YELLOW}\3${ENDCOLOR}#M"
+)
+declare -r TAILOG_RCLONE_LOGS=(
+    "${RCLONE_LOG_FILE}"
+)
+declare -r TAILOG_RCLONE_RES=(
+    "-e s/ INFO  / ${GRAY}INFO${ENDCOLOR}  /"
+    "-e s/ ERROR  / ${LIGHTGRAY}ERROR${ENDCOLOR}  /"
+)
+declare -r TAILOG_SQUID_LOGS=(
+    "${LOG_DIR}/squid/squid.access.log"
+    "${LOG_DIR}/squid/squid.error.log"
+    "${LOG_DIR}/squid/squid.cache.log"
+    "${LOG_DIR}/squid/squid.store.log"
+)
+declare -r TAILOG_SQUID_RES=(
+)
+declare -r TAILOG_AIDER_LOGS=(
+    "${LOG_FILE}"
+)
+declare -r TAILOG_AIDER_RES=(
+)
+
+# aider-dsm
+declare -r DSM_DOCKER_IPTABLES_MAX_ATTEMPTS=10
+declare -r DSM_DOCKER_IPTABLES_DELAY=15
+declare -r DSM_DOCKER_IPTABLES_RULE0="-A DOCKER -i docker0 -j RETURN"
+declare -r DSM_DOCKER_IPTABLES_RULE1="-A PREROUTING -m addrtype --dst-type LOCAL -j DOCKER"
+declare -r DSM_DOCKER_IPTABLES_RULE2="-A FORWARD -j DOCKER-USER"
+declare -r DSM_DOCKER_IPTABLES_RULE3="-A FORWARD -j DOCKER-ISOLATION-STAGE-1"
+# 인증서 파일의 권한 설정에 필요
+declare -r DSM_PUID=1026
+declare -r DSM_PGID=0
+# DSM
+declare -r DSM_CERT_DIR=/usr/syno/etc/certificate
+declare -r DSM_CERT_ARCHIVE=${DSM_CERT_DIR}/_archive
+declare -r DSM_CERT_INFO=${DSM_CERT_DIR}/_archive/INFO
+# Traefik
+declare -r DSM_CERT_TRAEFIK_DIR=/volume1/docker/volumes/traefik/config/acme
+declare -r DSM_CERT_TRAEFIK_ACME=${DSM_CERT_TRAEFIK_DIR}/acme.json
+# Common
+# ${DSM_DIR}에 관리중인 인증서의 경로를 입력
+declare -r DSM_DIR=${DSM_CERT_TRAEFIK_DIR} # Traefik의 인증서를 배포
+declare -r DSM_CERT_FILE_FULLCHAIN=fullchain.pem
+declare -r DSM_CERT_FILE_KEY=privkey.pem
+declare -r DSM_CERT_FILE_CERT=cert.pem
+declare -r DSM_CERT_FILE_CHAIN=chain.pem

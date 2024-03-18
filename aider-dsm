@@ -1,0 +1,360 @@
+#!/usr/bin/env bash
+
+dsm_docker_iptables(){
+    for i in $(seq 1 ${DSM_DOCKER_IPTABLES_MAX_ATTEMPTS}); do
+        echo "${i} 번째 시도..."
+        result=$(iptables-save)
+        if [[ ${result} =~ "${DSM_DOCKER_IPTABLES_RULE0}" ]]; then
+            echo "도커 규칙 발견!"
+            if [[ ! ${result} =~ "${DSM_DOCKER_IPTABLES_RULE1}" ]]; then
+                iptables -t nat "${DSM_DOCKER_IPTABLES_RULE1}" && echo "추가 완료: ${DSM_DOCKER_IPTABLES_RULE1}"
+            fi
+            if [[ ! ${result} =~ "${DSM_DOCKER_IPTABLES_RULE2}" ]]; then
+                iptables "${DSM_DOCKER_IPTABLES_RULE2}" && echo "추가 완료: ${DSM_DOCKER_IPTABLES_RULE2}"
+            fi
+            if [[ ! ${result} =~ "${DSM_DOCKER_IPTABLES_RULE3}" ]]; then
+                iptables "${DSM_DOCKER_IPTABLES_RULE3}" && echo "추가 완료: ${DSM_DOCKER_IPTABLES_RULE3}"
+            fi
+            break
+        fi
+        echo "도커 규칙을 찾을 수 없음! ${DSM_DOCKER_IPTABLES_DELAY} 초 대기..."
+        sleep ${DSM_DOCKER_IPTABLES_DELAY}
+    done
+}
+
+dsm_cert_traefik(){
+    ########## Traefik 처리
+    # Traefik은 json 파일에 인증서를 저장하기 때문에 추출하는 과정이 필요하다.
+    if [ ! -r "${DSM_CERT_TRAEFIK_ACME}" ]; then
+        echo "The file is not readable: ${DSM_CERT_TRAEFIK_ACME}"
+        exit 1
+    fi
+
+    echo "Extract certificates: ${DSM_CERT_TRAEFIK_ACME}"
+    domains=$(jq -r '.[].Certificates[]?.domain.main' "${DSM_CERT_TRAEFIK_ACME}")
+    for domain in $domains;
+    do
+        echo " Working on [${domain}]..."
+        # Traefik acme.json에 저장된 도메인들의 폴더를 생성
+        if [[ ! -d "${DSM_CERT_TRAEFIK_DIR}/${domain}" ]]; then
+            echo "  Make folder ${DSM_CERT_TRAEFIK_DIR}/${domain}"
+            mkdir -p "${DSM_CERT_TRAEFIK_DIR}/${domain}"
+        fi
+        # 각 도메인 폴더에 저장될 인증서 파일과 임시 파일
+        fullchain_file="${DSM_CERT_TRAEFIK_DIR}/${domain}/${DSM_CERT_FILE_FULLCHAIN}"
+        key_file="${DSM_CERT_TRAEFIK_DIR}/${domain}/${DSM_CERT_FILE_KEY}"
+        cert_file="${DSM_CERT_TRAEFIK_DIR}/${domain}/${DSM_CERT_FILE_CERT}"
+        chain_file="${DSM_CERT_TRAEFIK_DIR}/${domain}/${DSM_CERT_FILE_CHAIN}"
+        fullchain_file_new="${fullchain_file}.new"
+        key_file_new="${key_file}.new"
+        cert_file_new="${cert_file}.new"
+        chain_file_new="${chain_file}.new"
+
+        # acme.json에 저장된 인증서 정보를 pem 형식으로 변환
+        echo "  Generate fullchain of [${domain}]..."
+        jq -r ".[].Certificates[]? | select(.domain.main==\"${domain}\") | .certificate // empty" ${DSM_CERT_TRAEFIK_ACME} | base64 -d > ${fullchain_file_new}
+        fullchain=$(<$fullchain_file_new)
+        echo "  Generate private key of [${domain}]..."
+        jq -r ".[].Certificates[]? | select(.domain.main==\"${domain}\") | .key // empty" ${DSM_CERT_TRAEFIK_ACME} | base64 -d > ${key_file_new}
+        echo "  Generate certificate of [${domain}]..."
+        echo "${fullchain%%-----END CERTIFICATE-----*}-----END CERTIFICATE-----" > ${cert_file_new}
+        echo "  Generate chain of [${domain}]..."
+        echo $(echo -e "${fullchain#*-----END CERTIFICATE-----}" | sed '/./,$!d') > ${chain_file_new}
+
+        # 인증서의 소유자와 권한 변경
+        echo "  Change owner..."
+        chown ${DSM_PUID}:${DSM_PGID} ${fullchain_file_new} ${key_file_new} ${cert_file_new} ${chain_file_new}
+        echo "  Change permission..."
+        chmod 640 ${fullchain_file_new} ${key_file_new} ${cert_file_new} ${chain_file_new}
+
+        # 추출한 인증서와 기존 인증서를 비교 후 새 인증서 덮어쓰기
+        if ! diff -N "${fullchain_file_new}" "${fullchain_file}" > /dev/null; then
+            echo "  Certificate of [${domain}] is updated."
+            mv -v "${fullchain_file_new}" "${fullchain_file}"
+            mv -v "${key_file_new}" "${key_file}"
+            mv -v "${cert_file_new}" "${cert_file}"
+            mv -v "${chain_file_new}" "${chain_file}"
+        else
+            echo "  Certificate of [${domain}] is unchanged."
+            rm -f ${fullchain_file_new} ${key_file_new} ${cert_file_new} ${chain_file_new}
+        fi
+        echo ""
+    done
+
+}
+
+dsm_cert_deploy(){
+    # 사용자가 갱신한 인증서를 시놀로지에 다시 배포하는 작업이다.
+    # 시놀로지의 각 서비스들에 설정된 인증서의 도메인을 수집 후
+    # 사용자가 관리하는 인증서 폴더에서 일치하는 도메인을 찾아 해당 인증서를 복사한다.
+    #
+    # 이미 존재하는 인증서를 갱신하는 방식이므로
+    # 시놀로지의 인증서 가져오기로 해당 도메인의 인증서를 미리 추가해 줘야 한다.
+
+    # 사용자 관리 인증서 폴더 구조
+    #
+    #/${DSM_DIR}
+    #    /example.com
+    #        /privkey.pem
+    #        /cert.pem
+    #        /chain.pem
+    #        /fullchain.pem
+    #    /another.example.net
+    #        /privkey.pem
+    #        /cert.pem
+    #        /chain.pem
+    #        /fullchain.pem
+    #    ...
+
+    # 시놀로지의 인증서 폴더 구조
+    #
+    #/usr/syno/etc/certificate
+    #    /_archive
+    #        /xxxxxx
+    #        /xxxxxx
+    #        /DEFAULT
+    #        /INFO
+    #        /SERVICES
+    #        /.syno-ca-cert.srl
+    #    /kmip # 볼륨 암호화에 사용하는 인증서
+    #        /kmip
+    #            /cert.pem
+    #            /chain.pem
+    #            /fullchain.pem
+    #            /info
+    #            /privkey.pem
+    #    /AppPortal
+    #        /AudioStation_AltPort
+    #        /SynologyDrive
+    #        /SynologyMoments
+    #        ...
+    #    /ReverseProxy
+    #        /{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}
+    #        ...
+    #    /smbftpd/
+    #        /ftpd
+    #    /system
+    #        /default
+    #    /scripts
+    #        cert_tree.py
+    #        parse_root.py
+    #        __pycache__
+    #    ...
+    ########## ${DSM_DIR}의 인증서를 시놀로지 서비스에 배포
+    echo "Deploying certificates to DSM."
+    archives=$(jq -r 'keys[]' ${DSM_CERT_INFO})
+    for archive in ${archives};
+    do
+        # 시놀로지에 등록된 인증서 중에서 ${DSM_DIR}의 인증서로 갱신 가능한 인증서만 아카이브에 덮어쓰기
+        if [[ -e "${DSM_CERT_ARCHIVE}/${archive}/${DSM_CERT_FILE_CERT}" ]]; then
+            domain="$(openssl x509 --noout -subject -nameopt multiline -in "${DSM_CERT_ARCHIVE}/${archive}/${DSM_CERT_FILE_CERT}" | sed -n 's/ *commonName *= //p')"
+            echo ""
+            echo "${domain} is found on DSM configuration."
+            echo ""
+            if [[ -e "${DSM_DIR}/${domain}/${DSM_CERT_FILE_CERT}" ]]; then
+                # 일치하는 도메인이 있으면 archive 폴더에 복사
+                echo " Copy [${domain}] to [${DSM_CERT_ARCHIVE}/${archive}] from [${DSM_DIR}/${domain}]"
+                cp -v "${DSM_DIR}/${domain}"/*.pem "${DSM_CERT_ARCHIVE}/${archive}"
+                echo ""
+                echo " Check Synology services depend on [${domain}] certificate..."
+                # 각 인증서를 사용하는 서비스를 찾아서 인증서를 배포
+                while IFS='' read -r service; do
+                    service_name=$(echo ${service} | jq -r ".service")
+                    subscriber=$(echo ${service} | jq -r ".subscriber")
+                    if [[ -e "${DSM_CERT_DIR}/${subscriber}/${service_name}/${DSM_CERT_FILE_CERT}" ]]; then
+                        echo "  [${service_name}] depends on [${domain}]."
+                        # 아카이브의 인증서를 서비스 인증서의 경로로 복사
+                        echo "   Copy [${archive}] to [${DSM_CERT_DIR}/${subscriber}/${service_name}]"
+                        cp -v "${DSM_CERT_ARCHIVE}/${archive}"/*.pem "${DSM_CERT_DIR}/${subscriber}/${service_name}"
+                    fi
+                done < <(jq -cr ".[\"${archive}\"].services[]" ${DSM_CERT_INFO})
+                echo " Done...[${domain}]"
+            else
+                # 시놀로지에 등록됐지만 ${DSM_DIR}에 없는 인증서는 건너뛰기
+                echo " There is no certificate for \"${domain}\" in ${DSM_DIR}"
+            fi
+        fi
+    done
+}
+
+dsm_usb_bind_it(){
+    echo "Binding device ${1}..."
+    #echo "${1}" > /sys/bus/usb/drivers/usb/bind
+    echo "${1}" > /sys/module/usbcore/drivers/usb:usb/bind
+}
+
+dsm_usb_unbind_it(){
+    echo "Unbinding device ${1}..."
+    #echo "${1}" > /sys/bus/usb/drivers/usb/unbind
+    echo "${1}" > /sys/module/usbcore/drivers/usb:usb/unbind
+}
+
+dsm_usb_serial(){
+    # /proc/scsi/usb-storage/{N}
+    local info_file=${1}
+    echo "$(cat ${info_file} | sed -rn 's/Serial Number: ([0-9]*)/\1/p')"
+}
+
+dsm_usb_device(){
+    local serial=${1}
+    local device
+    for d in /sys/bus/usb/devices/*-*; do
+        if [[ -f "${d}/serial" ]]; then
+            serial_tmp=$(<"${d}/serial")
+            if [[ "${serial_tmp}" = "${serial}" ]]; then
+                device="$(basename ${d})"
+                break
+            fi
+        fi
+    done
+    if [[ -z "${device}" ]]; then
+        echo "Fail to find device with the serial ${serial}..."
+        exit 1
+    else
+        echo "${device}"
+    fi
+}
+
+dsm_usb_block(){
+    local serial=${1}
+    for info_file in /proc/scsi/usb-storage/*; do
+        serial_tmp=$(dsm_usb_serial ${info_file})
+        if [[ "${serial}" == "${serial_tmp}" ]]; then
+            echo "$(ls /sys/class/scsi_disk/$(basename ${info_file}):*/device/block)"
+        fi
+    done
+}
+
+dsm_usb_mountpoint(){
+    local serial=${1}
+    local block
+    for info_file in /proc/scsi/usb-storage/*; do
+        serial_tmp=$(dsm_usb_serial ${info_file})
+        if [[ "${serial}" == "${serial_tmp}" ]]; then
+            block=$(ls /sys/class/scsi_disk/$(basename ${info_file}):*/device/block)
+            while read -r line; do
+                if [[ "${line}" == /* ]]; then
+                    echo "${line}"
+                fi
+            done < <(lsblk -Alo mountpoints /dev/${block})
+        fi
+    done
+}
+
+dsm_usb_check_bound(){
+    local device=${1}
+    if [[ -d "/sys/bus/usb/devices/${device}/driver" ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+dsm_usb_bind(){
+    local serial=${1}
+    local device="$(dsm_usb_device ${serial})"
+
+    if dsm_usb_check_bound ${device}; then
+        msg="Already bound:"
+        while read -r line; do
+            msg="${msg} ${line}"
+        done < <(dsm_usb_mountpoint ${serial})
+        echo "${msg}"
+    else
+        dsm_usb_bind_it "${device}"
+    fi
+}
+
+dsm_usb_unbind(){
+    local serial=${1}
+    local device="$(dsm_usb_device ${serial})"
+    local block="$(dsm_usb_block ${serial})"
+
+    if dsm_usb_check_bound ${device}; then
+        /usr/syno/bin/synousbdisk -umount "${block}"
+        dsm_usb_unbind_it "${device}"
+    else
+        echo "Already unbound..."
+    fi
+}
+
+dsm_usb_list(){
+    local device
+    for d in /sys/bus/usb/devices/*-*; do
+        if [[ -f "${d}/serial" ]]; then
+            serial=$(<"${d}/serial")
+            echo "serial: ${serial}"
+            echo "    $(lsusb | grep ${serial})"
+        fi
+    done
+    for info_file in /proc/scsi/usb-storage/*; do
+        serial=$(dsm_usb_serial ${info_file})
+        msg="serial=${serial}"
+        while read -r line; do
+            msg="${msg} mountpoint=${line}"
+        done < <(dsm_usb_mountpoint ${serial})
+        echo "${msg}"
+    done
+}
+
+dsm_manager(){
+    case "${1}" in
+        docker)
+            shift 1
+            case "${1}" in
+                iptables)
+                    shift 1
+                    echo "run docker-iptables"
+                    dsm_docker_iptables
+                    ;;
+            esac
+            ;;
+        cert)
+            shift 1
+            case "${1}" in
+                traefik)
+                    shift 1
+                    dsm_cert_traefik
+                    ;;
+                deploy)
+                    shift 1
+                    dsm_cert_deploy
+                    discord_send -n "${NAME}@$(hostname)" "Certificates were deployed."
+                    ;;
+                archive)
+                    shift 1
+                    ls -avlh "${DSM_CERT_ARCHIVE}"
+                    ;;
+            esac
+            ;;
+        usb)
+            shift 1
+            case "${1}" in
+                bind)
+                    shift 1
+                    dsm_usb_bind ${1}
+                    ;;
+                unbind)
+                    shift 1
+                    dsm_usb_unbind ${1}
+                    ;;
+                list)
+                    shift 1
+                    dsm_usb_list
+                    ;;
+                check)
+                    shift 1
+                    for i in {1..10}; do
+                        device=$(dsm_usb_device ${1})
+                        if dsm_usb_check_bound ${device}; then
+                            echo "bound"
+                        else
+                            echo "not bound"
+                        fi
+                        sleep 5
+                    done
+
+            esac
+            ;;
+    esac
+}
