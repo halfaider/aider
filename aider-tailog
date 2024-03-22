@@ -15,4 +15,3 @@ tailog_manager(){
         fi
     fi
 }
-e
