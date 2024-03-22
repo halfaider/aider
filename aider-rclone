@@ -177,7 +177,7 @@ rclone_rc_job_list_detailed(){
 }
 
 rclone_service_start_post(){
-    log I "Rclone Remote Control deamon starts..."
+    log I "Rclone Remote Control daemon starts..."
     sleep 10
     for mount in ${RCLONE_MOUNTS}; do
         rclone_rc_mount "${mount%%:*}:" "${mount##*:}"
@@ -185,7 +185,7 @@ rclone_service_start_post(){
 }
 
 rclone_service_stop_post(){
-    log I "Rclone Remote Control deamon stops..."
+    log I "Rclone Remote Control daemon stops..."
     for mount in ${RCLONE_MOUNTS}; do
         rclone_rc_unmount "${mount##*:}"
     done
