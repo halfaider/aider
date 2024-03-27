@@ -1,0 +1,53 @@
+#!/bin/sh
+# Start/stop the tailscale daemon.
+#
+### BEGIN INIT INFO
+# Provides:          tailscaled
+# Required-Start:    $remote_fs $syslog $time
+# Required-Stop:     $remote_fs $syslog $time
+# Should-Start:      $network $named slapd autofs ypbind nscd nslcd winbind
+# Should-Stop:       $network $named slapd autofs ypbind nscd nslcd winbind
+# Default-Start:     2 3 4 5
+# Default-Stop:
+### END INIT INFO
+
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+DESC="tailscale daemon"
+NAME=tailscaled
+DAEMON=/usr/sbin/tailscaled
+PIDFILE=/var/run/tailscaled.pid
+SCRIPTNAME=/etc/init.d/"$NAME"
+
+test -f $DAEMON || exit 0
+
+. /lib/lsb/init-functions
+
+[ -r /etc/default/tailscaled ] && . /etc/default/tailscaled
+
+case "$1" in
+start|restart|reload|force-reload)  log_daemon_msg "Starting tailscaled" "tailscaled"
+        $DAEMON -cleanup -tun=userspace-networking
+        cd /root
+        nohup $DAEMON -tun=userspace-networking --state=/var/lib/tailscale/tailscaled.state --socket=/run/tailscale/tailscaled.sock -port=$PORT $FLAGS > /var/log/tailscale/tailscaled.log 2>&1 &
+        log_end_msg $?
+        ;;
+stop)   log_daemon_msg "Stopping tailscaled" "tailscaled"
+        pid=$(pidof -o %PPID -x "$NAME")
+        kill -s 9 $pid
+        RETVAL=$?
+        $DAEMON -cleanup -tun=userspace-networking
+        log_end_msg $RETVAL
+        ;;
+status)
+        if pidof -o %PPID -x "$NAME" >/dev/null 2>&1; then
+            log_success_msg "$NAME is running"
+        else
+            log_failure_msg "$NAME is not running"
+            exit 1
+        fi
+        ;;
+*)      log_action_msg "Usage: /etc/init.d/cron {start|stop|status|restart|reload|force-reload}"
+        exit 2
+        ;;
+esac
+exit 0
