@@ -1,7 +1,20 @@
 #!/usr/bin/env bash
 
 # sudo apt install xtables-addons-common libtext-csv-xs-perl libmoosex-types-netaddr-ip-perl
+# sudo modprobe xt_geoip
 # sudo iptables -A DOCKER-USER -m geoip -p tcp --dport 80 --src-cc KR -j DROP
+#
+# fix: modprobe: FATAL: Module xt_geoip not found in directory /lib/modules/5.13.0-1030-oracle
+# sudo apt install module-assistant
+# module-assistant --verbose --text-mode auto-install xtables-addons
+#
+# Can't locate Debian/Debhelper/Sequence/dkms.pm
+# apt install dh-dkms
+#
+# WSL2
+# https://unix.stackexchange.com/a/645131
+# https://github.com/microsoft/WSL/issues/9693#issuecomment-1450468035
+# sudo m-a -k /usr/src/linux -l 5.15.0-101-generic --verbose --text-mode a-i xtables-addons
 
 geoip_mods(){
     echo "Iptables Modules"
