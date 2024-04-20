@@ -73,25 +73,27 @@ rclone_flags_rc(){
 }
 
 rclone_rc_mount(){
-    local flags fs mountpoint vfsopt
+    local flags fs mountpoint vfsopt mountopt tmp_flag
     fs="${1}"
     mountpoint="${2}"
-    if [[ "${fs}" == "sjva:" ]]; then
-        #vfsopt='{"CacheMaxAge":7776000000000000,"CacheMaxSize":53687091200,"CacheMode":3,"CachePollInterval":300000000000,"CaseInsensitive":false,"ChunkSize":33554432,"ChunkSizeLimit":1073741824,"DirCacheTime":2592000000000000,"NoChecksum":true,"NoModTime":true,"NoSeek":true,"PollInterval":0,"ReadAhead":67108864}'
-        vfsopt='{"CacheMaxSize":53687091200,"CacheMode":3,"NoChecksum":true,"NoModTime":true,"NoSeek":true,"DirCacheTime":5184000000000000,"PollInterval":0,"ChunkSize":33554432,"ChunkSizeLimit":1073741824}'
-    else
-        vfsopt="${RCLONE_RC_MOUNT_FLAGS_VFSOPT}"
-    fi
-    if [[ ! -d "${mountpoint}" ]]; then
+    tmp_flag="RCLONE_RC_MOUNT_FLAGS_VFSOPT_${fs%%:*}"
+    tmp_flag="${tmp_flag^^}"
+    [[ ! -z "${!tmp_flag}" ]] && vfsopt="${!tmp_flag}" || vfsopt="${RCLONE_RC_MOUNT_FLAGS_VFSOPT}"
+    tmp_flag="RCLONE_RC_MOUNT_FLAGS_MOUNTOPT_${fs%%:*}"
+    tmp_flag="${tmp_flag^^}"
+    [[ ! -z "${!tmp_flag}" ]] && mountopt="${!tmp_flag}" || mountopt="${RCLONE_RC_MOUNT_FLAGS_MOUNTOPT}"
+    if [[ ! -e "${mountpoint}" ]]; then
         log I "Make the mount folder: ${mountpoint}"
         mkdir -p "${mountpoint}"
     fi
-    if [[ -d "${mountpoint}" ]]; then
-        flags=("mount/mount" "fs=${fs}" "mountPoint=${mountpoint}" "mountOpt=${RCLONE_RC_MOUNT_FLAGS_MOUNTOPT}" "vfsOpt=${vfsopt}")
+    if [[ -e "${mountpoint}" ]]; then
+        flags=("mount/mount" "fs=${fs}" "mountPoint=${mountpoint}" "mountOpt=${mountopt}" "vfsOpt=${vfsopt}")
         printf "$(rclone_exec "$(rclone_flags_rc "${flags[@]}")")"
     else
         log E "The mount point is not exists: ${mountpoint}"
     fi
+
+
 }
 
 rclone_rc_unmount(){
@@ -192,7 +194,8 @@ rclone_service_stop_post(){
 }
 
 rclone_rcd(){
-    flags="rcd
+    flags="--filter-from=${RCLONE_RC_FILTER_FILE}
+rcd
 --rc-addr=${RCLONE_RC_ADDR}
 --rc-htpasswd=${HOME}/rclone/.rclone-htpasswd
 --rc-enable-metrics

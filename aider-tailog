@@ -5,7 +5,7 @@ tailog_manager(){
         target="TAILOG_${1^^}_LOGS[@]"
         target_regex="TAILOG_${1^^}_RES[@]"
         if [[ -z "${!target}" ]]; then
-            echo -e "No logfile..."
+            echo -e "No logfile...: ${1}"
         else
             if [[ -z "${!target_regex}" ]]; then
                 tail -Fqn ${TAILOG_LINES} "${!target}"
