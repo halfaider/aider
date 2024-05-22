@@ -50,10 +50,65 @@ declare -r RCLONE_BACKUP_SOURCE=/
 declare -r RCLONE_BACKUP_TARGET=remote:/backup/${HOSTNAME}
 # remote mount 기본 옵션들
 declare -r RCLONE_RC_FILTER_FILE="/PATH/TO/FILTER/FILE.txt"
+# unit: nanosecond, bit
+SAMPLE_MOUNTOPT='
+{
+    "AllowNonEmpty": false,
+    "AllowOther": false,
+    "AllowRoot": false,
+    "AsyncRead": true,
+    "AttrTimeout": 1000000000,
+    "CaseInsensitive": null,
+    "Daemon": false,
+    "DaemonTimeout": 0,
+    "DaemonWait": 60000000000,
+    "DebugFUSE": false,
+    "DefaultPermissions": false,
+    "DeviceName": "",
+    "ExtraFlags": [],
+    "ExtraOptions": [],
+    "MaxReadAhead": 131072,
+    "NetworkMode": false,
+    "NoAppleDouble": true,
+    "NoAppleXattr": false,
+    "VolumeName": "",
+    "WritebackCache": false
+}
+'
+SAMPLE_VFSOPT='
+{
+    "CacheMaxAge": 3600000000000,
+    "CacheMaxSize": -1,
+    "CacheMinFreeSpace": -1,
+    "CacheMode": 0,
+    "CachePollInterval": 60000000000,
+    "CaseInsensitive": false,
+    "ChunkSize": 134217728,
+    "ChunkSizeLimit": -1,
+    "DirCacheTime": 300000000000,
+    "DirPerms": 511,
+    "DiskSpaceTotalSize": -1,
+    "FastFingerprint": false,
+    "FilePerms": 438,
+    "GID": 0,
+    "NoChecksum": false,
+    "NoModTime": false,
+    "NoSeek": false,
+    "PollInterval": 60000000000,
+    "ReadAhead": 0,
+    "ReadOnly": false,
+    "ReadWait": 20000000,
+    "UID": 0,
+    "Umask": 18,
+    "UsedIsSize": false,
+    "WriteBack": 5000000000,
+    "WriteWait": 1000000000
+}
+'
 declare -r RCLONE_RC_MOUNT_FLAGS_MOUNTOPT='{"AllowOther":true,"AllowNonEmpty":true}'
-declare -r RCLONE_RC_MOUNT_FLAGS_MOUNTOPT_REMOTE_A='{"AllowOther":true,"AllowNonEmpty":false}'
-declare -r RCLONE_RC_MOUNT_FLAGS_VFSOPT='{"CacheMaxSize":5368709120,"CacheMode":3}'
-declare -r RCLONE_RC_MOUNT_FLAGS_VFSOPT_REMOTE_B='{"CacheMaxSize":5368709120,"CacheMode":3,"NoChecksum":true}'
+declare -r RCLONE_RC_MOUNT_FLAGS_MOUNTOPT_REMOTE_A='{"AllowOther":true,"AllowNonEmpty":true}'
+declare -r RCLONE_RC_MOUNT_FLAGS_VFSOPT='{"CacheMaxSize":42949672960,"CacheMode":3}'
+declare -r RCLONE_RC_MOUNT_FLAGS_VFSOPT_REMOTE_B='{"CacheMaxSize":429496729600,"CacheMode":3,"NoChecksum":true}'
 declare -r RCLONE_MOUNTS="
 remote_A:/mnt/remote_A
 remote_B:/mnt/remote_B

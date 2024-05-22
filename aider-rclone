@@ -25,7 +25,7 @@ rclone_exec(){
     #    echo "[${flag}]"
     #done
 
-    result=$(${RCLONE} --config=${RCLONE_CONFIG} --log-level=${RCLONE_LOG_LEVEL} --log-file=${RCLONE_LOG_FILE} --cache-dir=${HOME}/.cache/rclone "${flags[@]}")
+    result=$(${RCLONE} "${flags[@]}" --config=${RCLONE_CONFIG} --log-level=${RCLONE_LOG_LEVEL} --log-file=${RCLONE_LOG_FILE} --cache-dir=${RCLONE_CACHE_DIR})
     exit_code=${?}
     echo "${result}"
     return ${exit_code}
@@ -66,22 +66,24 @@ rclone_exit_code(){
 rclone_flags_rc(){
     local flags
     #flags="rc|--rc-addr=${RCLONE_RC_ADDR}|--rc-user=${RCLONE_RC_USER}|--rc-pass=${RCLONE_RC_PASS}|--timeout=${RCLONE_TIME_OUT}|${@}"
-    flags=("rc" "--rc-addr=${RCLONE_RC_ADDR}" "--rc-user=${RCLONE_RC_USER}" "--rc-pass=${RCLONE_RC_PASS}" "--timeout=${RCLONE_TIME_OUT}" "${@}")
+    flags=("rc" "${@}" "--rc-addr=${RCLONE_RC_ADDR}" "--rc-user=${RCLONE_RC_USER}" "--rc-pass=${RCLONE_RC_PASS}" "--timeout=${RCLONE_TIME_OUT}")
     for flag in "${flags[@]}"; do
         echo "${flag}"
     done
 }
 
 rclone_rc_mount(){
-    local flags fs mountpoint vfsopt mountopt tmp_flag
+    local flags fs mountpoint vfsopt mountopt tmp_fs custom_vfsopt custom_mountopt
     fs="${1}"
     mountpoint="${2}"
-    tmp_flag="RCLONE_RC_MOUNT_FLAGS_VFSOPT_${fs%%:*}"
-    tmp_flag="${tmp_flag^^}"
-    [[ ! -z "${!tmp_flag}" ]] && vfsopt="${!tmp_flag}" || vfsopt="${RCLONE_RC_MOUNT_FLAGS_VFSOPT}"
-    tmp_flag="RCLONE_RC_MOUNT_FLAGS_MOUNTOPT_${fs%%:*}"
-    tmp_flag="${tmp_flag^^}"
-    [[ ! -z "${!tmp_flag}" ]] && mountopt="${!tmp_flag}" || mountopt="${RCLONE_RC_MOUNT_FLAGS_MOUNTOPT}"
+    tmp_fs=${fs%%:*}
+    tmp_fs="${tmp_fs//-/_}"
+    custom_vfsopt="RCLONE_RC_MOUNT_FLAGS_VFSOPT_${tmp_fs}"
+    custom_vfsopt="${custom_vfsopt^^}"
+    [[ ! -z "${!custom_vfsopt}" ]] && vfsopt="${!custom_vfsopt}" || vfsopt="${RCLONE_RC_MOUNT_FLAGS_VFSOPT}"
+    custom_mountopt="RCLONE_RC_MOUNT_FLAGS_MOUNTOPT_${tmp_fs}"
+    custom_mountopt="${custom_mountopt^^}"
+    [[ ! -z "${!custom_mountopt}" ]] && mountopt="${!custom_mountopt}" || mountopt="${RCLONE_RC_MOUNT_FLAGS_MOUNTOPT}"
     if [[ ! -e "${mountpoint}" ]]; then
         log I "Make the mount folder: ${mountpoint}"
         mkdir -p "${mountpoint}"
@@ -92,8 +94,6 @@ rclone_rc_mount(){
     else
         log E "The mount point is not exists: ${mountpoint}"
     fi
-
-
 }
 
 rclone_rc_unmount(){
@@ -180,16 +180,25 @@ rclone_rc_job_list_detailed(){
 
 rclone_service_start_post(){
     log I "Rclone Remote Control daemon starts..."
-    sleep 10
-    for mount in ${RCLONE_MOUNTS}; do
-        rclone_rc_mount "${mount%%:*}:" "${mount##*:}"
+    max_counter=60
+    for counter in $(seq 1 ${max_counter}); do
+        if rclone_exec "$(rclone_flags_rc "rc/noop")" 2>&1 >/dev/null ; then
+            log D "Rclone RC server is ready..."
+            for mount in ${RCLONE_MOUNTS}; do
+                rclone_rc_mount "${mount%%:*}:" "${mount##*:}"
+            done
+            break
+        else
+            log D "Rclone RC server is not ready..."
+            sleep 1
+        fi
     done
 }
 
 rclone_service_stop_post(){
     log I "Rclone Remote Control daemon stops..."
     for mount in ${RCLONE_MOUNTS}; do
-        rclone_rc_unmount "${mount##*:}"
+        umount -vl "${mount##*:}"
     done
 }
 
