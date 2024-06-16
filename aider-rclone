@@ -203,15 +203,17 @@ rclone_service_stop_post(){
 }
 
 rclone_rcd(){
-    flags="--filter-from=${RCLONE_RC_FILTER_FILE}
-rcd
+    flags="rcd
 --rc-addr=${RCLONE_RC_ADDR}
 --rc-htpasswd=${HOME}/rclone/.rclone-htpasswd
 --rc-enable-metrics
 --rc-serve
 --rc-web-gui
 --rc-web-gui-update
---rc-web-gui-no-open-browser"
+--rc-web-gui-no-open-browser
+--use-mmap
+--no-check-certificate
+--filter-from=${RCLONE_RC_FILTER_FILE}"
     rclone_exec "${flags[@]}"
 }
 
