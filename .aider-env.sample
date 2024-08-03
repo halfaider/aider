@@ -260,7 +260,7 @@ declare -r DSM_CERT_TRAEFIK_DIR=/volume1/docker/volumes/traefik/config/acme
 declare -r DSM_CERT_TRAEFIK_ACME=${DSM_CERT_TRAEFIK_DIR}/acme.json
 # Common
 # ${DSM_DIR}에 관리중인 인증서의 경로를 입력
-declare -r DSM_DIR=${DSM_CERT_TRAEFIK_DIR} # Traefik의 인증서를 배포
+declare -r DSM_CERT_USER_DIR=${DSM_CERT_TRAEFIK_DIR} # Traefik의 인증서를 배포
 declare -r DSM_CERT_FILE_FULLCHAIN=fullchain.pem
 declare -r DSM_CERT_FILE_KEY=privkey.pem
 declare -r DSM_CERT_FILE_CERT=cert.pem

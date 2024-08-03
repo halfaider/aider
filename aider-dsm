@@ -6,15 +6,9 @@ dsm_docker_iptables(){
         result=$(iptables-save)
         if [[ ${result} =~ "${DSM_DOCKER_IPTABLES_RULE0}" ]]; then
             echo "도커 규칙 발견!"
-            if [[ ! ${result} =~ "${DSM_DOCKER_IPTABLES_RULE1}" ]]; then
-                iptables -t nat "${DSM_DOCKER_IPTABLES_RULE1}" && echo "추가 완료: ${DSM_DOCKER_IPTABLES_RULE1}"
-            fi
-            if [[ ! ${result} =~ "${DSM_DOCKER_IPTABLES_RULE2}" ]]; then
-                iptables "${DSM_DOCKER_IPTABLES_RULE2}" && echo "추가 완료: ${DSM_DOCKER_IPTABLES_RULE2}"
-            fi
-            if [[ ! ${result} =~ "${DSM_DOCKER_IPTABLES_RULE3}" ]]; then
-                iptables "${DSM_DOCKER_IPTABLES_RULE3}" && echo "추가 완료: ${DSM_DOCKER_IPTABLES_RULE3}"
-            fi
+            iptables -t nat "${DSM_DOCKER_IPTABLES_RULE1}" && echo "추가 완료: ${DSM_DOCKER_IPTABLES_RULE1}"
+            iptables "${DSM_DOCKER_IPTABLES_RULE2}" && echo "추가 완료: ${DSM_DOCKER_IPTABLES_RULE2}"
+            iptables "${DSM_DOCKER_IPTABLES_RULE3}" && echo "추가 완료: ${DSM_DOCKER_IPTABLES_RULE3}"
             break
         fi
         echo "도커 규칙을 찾을 수 없음! ${DSM_DOCKER_IPTABLES_DELAY} 초 대기..."
