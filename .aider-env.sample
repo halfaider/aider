@@ -198,13 +198,13 @@ declare -r TAILOG_PLEX_RES=(
     "-e s/(time=[0-9]+)/${YELLOW}\1${ENDCOLOR}/"
 )
 declare -r TAILOG_FLASKFARM_LOGS=(
-    ${HOME}/docker/volumes/flaskfarm/data/log/*.log
+    ${HOME}/docker/volumes/flaskfarm/data/log/!(all).log
 )
 declare -r TAILOG_FLASKFARM_RES=(
-    "-e s#^(\[.+)DEBUG(.+:[0-9]+\])\s?(.+)\$#\1${LIGHTGRAY}DEBUG${ENDCOLOR}\2 ${LIGHTGRAY}\3${ENDCOLOR}#M"
-    "-e s#^(\[.+)INFO(.+:[0-9]+\])\s?(.+)\$#\1${GREEN}INFO${ENDCOLOR}\2 ${GREEN}\3${ENDCOLOR}#M"
-    "-e s#^(\[.+)WARNING(.+:[0-9]+\])\s?(.+)\$#\1${YELLOW}WARNING${ENDCOLOR}\2 ${YELLOW}\3${ENDCOLOR}#M"
-    "-e s#^(\[.+)ERROR(.+:[0-9]+\])\s?(.+)\$#\1${RED}ERROR${ENDCOLOR}\2 ${RED}\3${ENDCOLOR}#M"
+    "-e s#^(\[.+)(DEBUG|debug)(.+:[0-9]+\])\s?(.+)\$#\1${LIGHTGRAY}\2${ENDCOLOR}\3 ${LIGHTGRAY}\4${ENDCOLOR}#M"
+    "-e s#^(\[.+)(INFO|info)(.+:[0-9]+\])\s?(.+)\$#\1${GREEN}\2${ENDCOLOR}\3 ${GREEN}\4${ENDCOLOR}#M"
+    "-e s#^(\[.+)(WARNING|warning)(.+:[0-9]+\])\s?(.+)\$#\1${YELLOW}\2${ENDCOLOR}\3 ${YELLOW}\4${ENDCOLOR}#M"
+    "-e s#^(\[.+)(ERROR|error)(.+:[0-9]+\])\s?(.+)\$#\1${RED}\2${ENDCOLOR}\3 ${RED}\4${ENDCOLOR}#M"
     "-e s#^(\[.+:\s)DEBUG(/\w+\])\s(.+)\$#\1${LIGHTGRAY}DEBUG${ENDCOLOR}\2 ${LIGHTGRAY}\3${ENDCOLOR}#M"
     "-e s#^(\[.+:\s)ERROR(/\w+\])\s(.+)\$#\1${RED}ERROR${ENDCOLOR}\2 ${RED}\3${ENDCOLOR}#M"
     "-e s#^(\[.+:\s)INFO(/\w+\])\s(.+)\$#\1${GRAY}INFO${ENDCOLOR}\2 ${GRAY}\3${ENDCOLOR}#M"

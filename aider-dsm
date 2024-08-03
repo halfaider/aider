@@ -93,7 +93,7 @@ dsm_cert_deploy(){
 
     # 사용자 관리 인증서 폴더 구조
     #
-    #/${DSM_DIR}
+    #/${DSM_CERT_USER_DIR}
     #    /example.com
     #        /privkey.pem
     #        /cert.pem
@@ -140,21 +140,21 @@ dsm_cert_deploy(){
     #        parse_root.py
     #        __pycache__
     #    ...
-    ########## ${DSM_DIR}의 인증서를 시놀로지 서비스에 배포
+    ########## ${DSM_CERT_USER_DIR}의 인증서를 시놀로지 서비스에 배포
     echo "Deploying certificates to DSM."
     archives=$(jq -r 'keys[]' ${DSM_CERT_INFO})
     for archive in ${archives};
     do
-        # 시놀로지에 등록된 인증서 중에서 ${DSM_DIR}의 인증서로 갱신 가능한 인증서만 아카이브에 덮어쓰기
+        # 시놀로지에 등록된 인증서 중에서 ${DSM_CERT_USER_DIR}의 인증서로 갱신 가능한 인증서만 아카이브에 덮어쓰기
         if [[ -e "${DSM_CERT_ARCHIVE}/${archive}/${DSM_CERT_FILE_CERT}" ]]; then
             domain="$(openssl x509 --noout -subject -nameopt multiline -in "${DSM_CERT_ARCHIVE}/${archive}/${DSM_CERT_FILE_CERT}" | sed -n 's/ *commonName *= //p')"
             echo ""
             echo "${domain} is found on DSM configuration."
             echo ""
-            if [[ -e "${DSM_DIR}/${domain}/${DSM_CERT_FILE_CERT}" ]]; then
+            if [[ -e "${DSM_CERT_USER_DIR}/${domain}/${DSM_CERT_FILE_CERT}" ]]; then
                 # 일치하는 도메인이 있으면 archive 폴더에 복사
-                echo " Copy [${domain}] to [${DSM_CERT_ARCHIVE}/${archive}] from [${DSM_DIR}/${domain}]"
-                cp -v "${DSM_DIR}/${domain}"/*.pem "${DSM_CERT_ARCHIVE}/${archive}"
+                echo " Copy [${domain}] to [${DSM_CERT_ARCHIVE}/${archive}] from [${DSM_CERT_USER_DIR}/${domain}]"
+                cp -v "${DSM_CERT_USER_DIR}/${domain}"/*.pem "${DSM_CERT_ARCHIVE}/${archive}"
                 echo ""
                 echo " Check Synology services depend on [${domain}] certificate..."
                 # 각 인증서를 사용하는 서비스를 찾아서 인증서를 배포
@@ -170,8 +170,8 @@ dsm_cert_deploy(){
                 done < <(jq -cr ".[\"${archive}\"].services[]" ${DSM_CERT_INFO})
                 echo " Done...[${domain}]"
             else
-                # 시놀로지에 등록됐지만 ${DSM_DIR}에 없는 인증서는 건너뛰기
-                echo " There is no certificate for \"${domain}\" in ${DSM_DIR}"
+                # 시놀로지에 등록됐지만 ${DSM_CERT_USER_DIR}에 없는 인증서는 건너뛰기
+                echo " There is no certificate for \"${domain}\" in ${DSM_CERT_USER_DIR}"
             fi
         fi
     done
