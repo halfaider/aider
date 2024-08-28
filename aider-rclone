@@ -207,7 +207,10 @@ rclone_rcd(){
 --rc-addr=${RCLONE_RC_ADDR}
 --rc-htpasswd=${HOME}/rclone/.rclone-htpasswd
 --rc-enable-metrics
+--rc-server-read-timeout=0
+--rc-server-write-timeout=0
 --rc-serve
+--rc-serve-no-modtime
 --rc-web-gui
 --rc-web-gui-update
 --rc-web-gui-no-open-browser
