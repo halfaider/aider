@@ -65,8 +65,7 @@ rclone_exit_code(){
 
 rclone_flags_rc(){
     local flags
-    #flags="rc|--rc-addr=${RCLONE_RC_ADDR}|--rc-user=${RCLONE_RC_USER}|--rc-pass=${RCLONE_RC_PASS}|--timeout=${RCLONE_TIME_OUT}|${@}"
-    flags=("rc" "${@}" "--rc-addr=${RCLONE_RC_ADDR}" "--rc-user=${RCLONE_RC_USER}" "--rc-pass=${RCLONE_RC_PASS}" "--timeout=${RCLONE_TIME_OUT}")
+    flags=("rc" "${@}" "--url=${RCLONE_RC_ADDR}" "--user=${RCLONE_RC_USER}" "--pass=${RCLONE_RC_PASS}" "--timeout=${RCLONE_TIME_OUT}")
     for flag in "${flags[@]}"; do
         echo "${flag}"
     done
