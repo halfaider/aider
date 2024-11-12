@@ -50,6 +50,30 @@ declare -r RCLONE_BACKUP_SOURCE=/
 declare -r RCLONE_BACKUP_TARGET=remote:/backup/${HOSTNAME}
 # remote mount 기본 옵션들
 declare -r RCLONE_RC_FILTER_FILE="/PATH/TO/FILTER/FILE.txt"
+# rclone flags
+declare -r RCLONE_FLAGS_DEFAULT="--config=${RCLONE_CONFIG}
+--log-level=${RCLONE_LOG_LEVEL}
+--log-file=${RCLONE_LOG_FILE}
+--cache-dir=${RCLONE_CACHE_DIR}"
+declare -r RCLONE_FLAGS_RC="--url=${RCLONE_RC_ADDR}
+--user=${RCLONE_RC_USER}
+--pass=${RCLONE_RC_PASS}
+--timeout=${RCLONE_TIME_OUT}"
+declare -r RCLONE_FLAGS_RCD="rcd
+--rc-addr=${RCLONE_RC_ADDR}
+--rc-enable-metrics
+--rc-user=${RCLONE_RC_USER}
+--rc-pass=${RCLONE_RC_PASS}
+--rc-serve
+--rc-web-gui
+--rc-web-gui-update
+--rc-web-gui-no-open-browser
+--use-mmap
+--filter-from=${RCLONE_RC_FILTER_FILE}"
+declare -r RCLONE_FLAGS_BACKUP="--create-empty-src-dirs
+--filter-from=${RCLONE_FILTER_BACKUP}
+--ignore-checksum
+--ignore-size"
 # unit: nanosecond, bit
 SAMPLE_MOUNTOPT='
 {
@@ -105,15 +129,23 @@ SAMPLE_VFSOPT='
     "WriteWait": 1000000000
 }
 '
+#  50 Gib = 429496729600 bits
+#  20 Gib = 171798691840 bits
+#  10 GiB =  85899345920 bits
+#   5 Gib =  42949672960 bits
+# 128 Mib =   1073741824 bits
+#   4 Mib =     33554432 bits
+# 60 days = 5184000000000000 ns
+#   1 day =   86400000000000 ns
+#    10 m =     600000000000 ns
+#     5 m =     300000000000 ns
 declare -r RCLONE_RC_MOUNT_FLAGS_MOUNTOPT='{"AllowOther":true,"AllowNonEmpty":true}'
 declare -r RCLONE_RC_MOUNT_FLAGS_MOUNTOPT_REMOTE_A='{"AllowOther":true,"AllowNonEmpty":true}'
 declare -r RCLONE_RC_MOUNT_FLAGS_VFSOPT='{"CacheMaxSize":42949672960,"CacheMode":3}'
 declare -r RCLONE_RC_MOUNT_FLAGS_VFSOPT_REMOTE_B='{"CacheMaxSize":429496729600,"CacheMode":3,"NoChecksum":true}'
-declare -r RCLONE_MOUNTS="
-remote_A:/mnt/remote_A
+declare -r RCLONE_MOUNTS="remote_A:/mnt/remote_A
 remote_B:/mnt/remote_B
-remote_C:/mnt/remote_C
-"
+remote_C:/mnt/remote_C"
 
 # aider-tailog
 declare -r BLACK=$(printf '\033[30m')

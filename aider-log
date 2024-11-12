@@ -6,7 +6,7 @@ declare -rA LOGGING_LEVEL=([D]=DEBUG [I]=INFO [W]=WARN [E]=ERROR [S]=SEVERE [C]=
 declare -rA LOGGING_PRIORITY=([DEBUG]=0 [INFO]=1 [WARN]=2 [ERROR]=3 [SEVERE]=4 [CRITICAL]=5)
 
 log_get_now(){
-    echo "$(TZ='Asia/Seoul' date '+%Y-%m-%d %T%z')"
+    echo "$(TZ='Asia/Seoul' date '+%Y-%m-%dT%T%z')"
 }
 
 log_log(){
