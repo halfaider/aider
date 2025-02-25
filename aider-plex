@@ -39,6 +39,36 @@ plex_clean_cache(){
     rm -rfv "${photo_transcoder}"/**
 }
 
+plex_ramdisk(){
+    for pair in "${PLEX_RAM_LINK_BACKUP_PAIRS[@]}"; do
+        IFS="|" read -r -a dirs <<< "${pair}"
+        plex_db_ram="${dirs[0]}/${PLEX_DB_FILE}"
+        plex_db_backup="${dirs[1]}/${PLEX_DB_FILE}"
+        plex_db_link="${dirs[2]}/${PLEX_DB_FILE}"
+        if [[ -e "${plex_db_ram}" ]]; then
+            # 램디스크에 파일이 있으면 백업
+            if [[ ! -e "${dirs[1]}" ]]; then
+                mkdir -vp "${dirs[1]}"
+            fi
+            cp -vrf "${plex_db_ram}" "${plex_db_backup}"
+            log I "DB 백업 완료: ${plex_db_ram}"
+        else
+            # 램디스크에 파일이 없으면 백업에서 복사
+            if [[ ! -e "${plex_db_backup}" ]]; then
+                log E "파일 없음: ${plex_db_backup}"
+                continue
+            fi
+            if [[ ! -e "${dirs[0]}" ]]; then
+                mkdir -vp "${dirs[0]}"
+            fi
+            cp "${plex_db_backup}" "${plex_db_ram}"
+            chown -R ${PUID}:${PGID} "${dirs[0]}"
+            log I "DB 복사 완료: ${plex_db_ram}"
+        fi
+        check_link "${dirs[2]}"
+    done
+}
+
 plex_manager(){
     case "${1}" in
         "scan")
@@ -54,6 +84,9 @@ plex_manager(){
             ;;
         "clean")
             plex_clean_cache
+            ;;
+        "ramdisk")
+            plex_ramdisk
             ;;
     esac
 }

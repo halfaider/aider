@@ -82,6 +82,22 @@ join_by(){
     fi
 }
 
+check_link(){
+    if [[ -L "${1}" ]]; then
+        if [[ -e "${1}" ]]; then
+            log I "링크 정상: ${1}"
+            return 0
+        else
+            log E "링크 비정상: ${1}"
+            return 1
+        fi
+    else
+        log E "링크가 아님: ${1}"
+        return 2
+    fi
+    return 3
+}
+
 args="${*}"
 start_pre "${args}"
 case "${1}" in

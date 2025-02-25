@@ -33,6 +33,11 @@ declare -r PLEX_LD_LIBRARY_PATH=/var/packages/PlexMediaServer/target:/var/packag
 declare -r PLEX_URL="https://plex:32400"
 declare -r PLEX_TOKEN=""
 declare -r PLEX_LAUNCHER=/var/packages/PlexMediaServer/scripts/start-stop-status
+declare -r PLEX_DB_FILE="com.plexapp.plugins.library.db"
+declare -r PLEX_RAM_LINK_BACKUP_PAIRS=(
+    "/dev/shm/plex/Databases|${HOME}/backup/plex|/../plex/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases"
+    "/dev/shm/plex-music/Databases|${HOME}/backup/plex-music|/../plex-music/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases"
+)
 
 # aider-rclone
 declare -r RCLONE=/usr/bin/rclone
@@ -73,7 +78,9 @@ declare -r RCLONE_FLAGS_RCD="rcd
 declare -r RCLONE_FLAGS_BACKUP="--create-empty-src-dirs
 --filter-from=${RCLONE_FILTER_BACKUP}
 --ignore-checksum
---ignore-size"
+--ignore-size
+--progress"
+
 # unit: nanosecond, bit
 SAMPLE_MOUNTOPT='
 {
@@ -129,14 +136,20 @@ SAMPLE_VFSOPT='
     "WriteWait": 1000000000
 }
 '
-#  50 Gib = 429496729600 bits
-#  20 Gib = 171798691840 bits
+#  50 GiB = 429496729600 bits
+#  20 GiB = 171798691840 bits
 #  10 GiB =  85899345920 bits
-#   5 Gib =  42949672960 bits
-# 128 Mib =   1073741824 bits
-#   4 Mib =     33554432 bits
+#   5 GiB =  42949672960 bits
+#   1 GiB =   8589934592 bits
+# 500 MiB =   4194304000 bits
+# 128 MiB =   1073741824 bits
+#  32 MiB =    268435456 bits
+#  16 MiB =    134217728 bits
+#   8 MiB =     67108864 bits
+#   4 MiB =     33554432 bits
 # 60 days = 5184000000000000 ns
 #   1 day =   86400000000000 ns
+#  1 hour =    3600000000000 ns
 #    10 m =     600000000000 ns
 #     5 m =     300000000000 ns
 declare -r RCLONE_RC_MOUNT_FLAGS_MOUNTOPT='{"AllowOther":true,"AllowNonEmpty":true}'
