@@ -35,8 +35,12 @@ declare -r PLEX_TOKEN=""
 declare -r PLEX_LAUNCHER=/var/packages/PlexMediaServer/scripts/start-stop-status
 declare -r PLEX_DB_FILE="com.plexapp.plugins.library.db"
 declare -r PLEX_RAM_LINK_BACKUP_PAIRS=(
-    "/dev/shm/plex/Databases|${HOME}/backup/plex|/../plex/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases"
-    "/dev/shm/plex-music/Databases|${HOME}/backup/plex-music|/../plex-music/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases"
+    "/dev/shm/plex/Databases|${HOME}/backup/plex|/plex/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases"
+    "/dev/shm/plex-music/Databases|${HOME}/backup/plex-music|/plex-music/config/Library/Application Support/Plex Media Server/Plug-in Support/Databases"
+)
+declare -r PLEX_DB_BACKUPS=(
+    "${HOME}/backup/plex/Databases"
+    "${HOME}/backup/plex-music/Databases"
 )
 
 # aider-rclone

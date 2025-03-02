@@ -40,16 +40,14 @@ plex_clean_cache(){
 }
 
 plex_ramdisk(){
-    for pair in "${PLEX_RAM_LINK_BACKUP_PAIRS[@]}"; do
+    for pair in "${PLEX_RAM_BACKUP_LINK_PAIRS[@]}"; do
         IFS="|" read -r -a dirs <<< "${pair}"
         plex_db_ram="${dirs[0]}/${PLEX_DB_FILE}"
         plex_db_backup="${dirs[1]}/${PLEX_DB_FILE}"
         plex_db_link="${dirs[2]}/${PLEX_DB_FILE}"
         if [[ -e "${plex_db_ram}" ]]; then
             # 램디스크에 파일이 있으면 백업
-            if [[ ! -e "${dirs[1]}" ]]; then
-                mkdir -vp "${dirs[1]}"
-            fi
+            [[ ! -e "${dirs[1]}" ]] && mkdir -vp "${dirs[1]}"
             cp -vrf "${plex_db_ram}" "${plex_db_backup}"
             log I "DB 백업 완료: ${plex_db_ram}"
         else
@@ -58,14 +56,35 @@ plex_ramdisk(){
                 log E "파일 없음: ${plex_db_backup}"
                 continue
             fi
-            if [[ ! -e "${dirs[0]}" ]]; then
-                mkdir -vp "${dirs[0]}"
-            fi
+            [[ ! -e "${dirs[0]}" ]] && mkdir -vp "${dirs[0]}"
             cp "${plex_db_backup}" "${plex_db_ram}"
-            chown -R ${PUID}:${PGID} "${dirs[0]}"
+            chown -R plex:plex "${dirs[0]}"
             log I "DB 복사 완료: ${plex_db_ram}"
         fi
         check_link "${dirs[2]}"
+    done
+}
+
+plex_backup(){
+    README="""
+    ~/backup/plex/Databases
+        /com.plexapp.plugins.library.2025-02-13.db
+        /com.plexapp.plugins.library.2025-02-26.db
+        /com.plexapp.plugins.library.db
+        /com.plexapp.plugins.library.db.0.gz
+        /com.plexapp.plugins.library.db.1.gz
+        /com.plexapp.plugins.library.db.2.gz
+    """
+    for backup_dir in "${PLEX_DB_BACKUPS[@]}"; do
+        backup_targets=("${backup_dir}/com.plexapp.plugins.library".*.db)
+        #backup_targets=("${backup_dir}/"*.db)
+        for idx in $( seq 0 $((${#backup_targets[@]} - 1)) ); do
+            [[ ! -f "${backup_targets[$idx]}" ]] && continue
+            cd ${backup_dir}
+            tar -zcvf "${PLEX_DB_FILE}.${idx}.tar.gz" "$(basename "${backup_targets[$idx]}")"
+            #gzip -cvf "${backup_targets[$idx]}" > "${backup_dir}/${PLEX_DB_FILE}.${idx}.gz"
+
+        done
     done
 }
 
@@ -87,6 +106,9 @@ plex_manager(){
             ;;
         "ramdisk")
             plex_ramdisk
+            ;;
+        "backup")
+            plex_backup
             ;;
     esac
 }
