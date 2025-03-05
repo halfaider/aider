@@ -140,26 +140,34 @@ SAMPLE_VFSOPT='
     "WriteWait": 1000000000
 }
 '
-#  50 GiB = 429496729600 bits
-#  20 GiB = 171798691840 bits
-#  10 GiB =  85899345920 bits
-#   5 GiB =  42949672960 bits
-#   1 GiB =   8589934592 bits
-# 500 MiB =   4194304000 bits
-# 128 MiB =   1073741824 bits
-#  32 MiB =    268435456 bits
-#  16 MiB =    134217728 bits
-#   8 MiB =     67108864 bits
-#   4 MiB =     33554432 bits
+#   50 GiB = 53687091200 bytes
+#   25 GiB = 26843545600 bytes
+#   10 GiB = 10737418240 bytes
+#    5 GiB =  5368709120 bytes
+#    2 GiB =  2147483648 bytes
+#    1 GiB =  1073741824 bytes
+#  900 MiB =   943718400 bytes
+#  750 MiB =   786432000 bytes
+#  500 MiB =   524288000 bytes
+#  256 MiB =   268435456 bytes
+#  128 MiB =   134217728 bytes
+#   64 MiB =    67108864 bytes
+#   32 MiB =    33554432 bytes
+#   16 MiB =    16777216 bytes
+#    8 MiB =     8388608 bytes
+#    4 MiB =     4194304 bytes
+#    2 MiB =     2097152 bytes
+#    1 MiB =     1048576 bytes
 # 60 days = 5184000000000000 ns
 #   1 day =   86400000000000 ns
 #  1 hour =    3600000000000 ns
 #    10 m =     600000000000 ns
 #     5 m =     300000000000 ns
+#    60 s =      60000000000 ns
 declare -r RCLONE_RC_MOUNT_FLAGS_MOUNTOPT='{"AllowOther":true,"AllowNonEmpty":true}'
 declare -r RCLONE_RC_MOUNT_FLAGS_MOUNTOPT_REMOTE_A='{"AllowOther":true,"AllowNonEmpty":true}'
-declare -r RCLONE_RC_MOUNT_FLAGS_VFSOPT='{"CacheMaxSize":42949672960,"CacheMode":3}'
-declare -r RCLONE_RC_MOUNT_FLAGS_VFSOPT_REMOTE_B='{"CacheMaxSize":429496729600,"CacheMode":3,"NoChecksum":true}'
+declare -r RCLONE_RC_MOUNT_FLAGS_VFSOPT='{"CacheMaxSize":5368709120,"CacheMode":3}'
+declare -r RCLONE_RC_MOUNT_FLAGS_VFSOPT_REMOTE_B='{"CacheMaxSize":10737418240,"CacheMode":3,"NoChecksum":true}'
 declare -r RCLONE_MOUNTS="remote_A:/mnt/remote_A
 remote_B:/mnt/remote_B
 remote_C:/mnt/remote_C"
