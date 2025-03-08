@@ -68,22 +68,17 @@ plex_ramdisk(){
 plex_backup(){
     README="""
     ~/backup/plex/Databases
-        /com.plexapp.plugins.library.2025-02-13.db
-        /com.plexapp.plugins.library.2025-02-26.db
-        /com.plexapp.plugins.library.db
+        /com.plexapp.plugins.library.db-2025-03-08
+        /com.plexapp.plugins.library.db-2025-03-11
         /com.plexapp.plugins.library.db.0.gz
         /com.plexapp.plugins.library.db.1.gz
-        /com.plexapp.plugins.library.db.2.gz
     """
     for backup_dir in "${PLEX_DB_BACKUPS[@]}"; do
-        backup_targets=("${backup_dir}/com.plexapp.plugins.library".*.db)
-        #backup_targets=("${backup_dir}/"*.db)
+        backup_targets=("${backup_dir}"/com.plexapp.plugins.library.db-*)
         for idx in $( seq 0 $((${#backup_targets[@]} - 1)) ); do
             [[ ! -f "${backup_targets[$idx]}" ]] && continue
             cd ${backup_dir}
             tar -zcvf "${PLEX_DB_FILE}.${idx}.tar.gz" "$(basename "${backup_targets[$idx]}")"
-            #gzip -cvf "${backup_targets[$idx]}" > "${backup_dir}/${PLEX_DB_FILE}.${idx}.gz"
-
         done
     done
 }
