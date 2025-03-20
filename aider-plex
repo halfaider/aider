@@ -75,10 +75,18 @@ plex_backup(){
     """
     for backup_dir in "${PLEX_DB_BACKUPS[@]}"; do
         backup_targets=("${backup_dir}"/com.plexapp.plugins.library.db-*)
-        for idx in $( seq 0 $((${#backup_targets[@]} - 1)) ); do
-            [[ ! -f "${backup_targets[$idx]}" ]] && continue
+        IFS=$'\n' sorted=($(sort -r <<<"${backup_targets[*]}"))
+        unset IFS
+        for idx in $( seq 0 $((${#sorted[@]} - 1)) ); do
+            [[ ! -f "${sorted[$idx]}" ]] && continue
+            if [[ ${idx} -gt 1 ]]; then
+                echo "rm: ${sorted[$idx]}"
+                rm -f "${sorted[$idx]}"
+                continue
+            fi
             cd ${backup_dir}
-            tar -zcvf "${PLEX_DB_FILE}.${idx}.tar.gz" "$(basename "${backup_targets[$idx]}")"
+            echo "tar: ${PLEX_DB_FILE}.${idx}.tar.gz < ${sorted[$idx]}"
+            tar -zcvf "${PLEX_DB_FILE}.${idx}.tar.gz" "$(basename "${sorted[$idx]}")"
         done
     done
 }
