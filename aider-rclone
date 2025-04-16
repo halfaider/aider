@@ -263,6 +263,10 @@ rclone_manager(){
         "rc-unmount-all")
             rclone_rc_unmount all
             ;;
+        "rc-log-level")
+            shift 1
+            rclone_exec "$(rclone_flags_rc options/set --json "{\"main\": {\"LogLevel\": ${1}}}")"
+            ;;
         "stats")
             rclone_exec "$(rclone_flags_rc core/stats)"
             ;;
