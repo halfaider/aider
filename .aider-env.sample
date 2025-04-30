@@ -71,6 +71,8 @@ declare -r RCLONE_FLAGS_RC="--url=${RCLONE_RC_ADDR}
 declare -r RCLONE_FLAGS_RCD="rcd
 --rc-addr=${RCLONE_RC_ADDR}
 --rc-enable-metrics
+--rc-server-read-timeout=0
+--rc-server-write-timeout=0
 --rc-user=${RCLONE_RC_USER}
 --rc-pass=${RCLONE_RC_PASS}
 --rc-serve
@@ -159,6 +161,9 @@ SAMPLE_VFSOPT='
 #    2 MiB =     2097152 bytes
 #    1 MiB =     1048576 bytes
 # 60 days = 5184000000000000 ns
+# 30 days = 2592000000000000 ns
+# 15 days = 1296000000000000 ns
+#  7 days =  604800000000000 ns
 #   1 day =   86400000000000 ns
 #  1 hour =    3600000000000 ns
 #    10 m =     600000000000 ns
@@ -251,7 +256,7 @@ declare -r TAILOG_PLEX_RES=(
     "-e s/Client \[(.*)\]/Client \[${YELLOW}\1${ENDCOLOR}\]/"
     "-e s/Statistics: \((.*)\) Reporting/Statistics: (${YELLOW}\1${ENDCOLOR}) Reporting/"
     "-e s/(playbackTime=[0-9]+)/${YELLOW}\1${ENDCOLOR}/"
-    "-e s/(state=[^\&]+)/${YELLOW}\1${ENDCOLOR}/"
+    "-e s/(state=[a-z]?+)/${YELLOW}\1${ENDCOLOR}/"
     "-e s/(time=[0-9]+)/${YELLOW}\1${ENDCOLOR}/"
 )
 declare -r TAILOG_FLASKFARM_LOGS=(
@@ -266,6 +271,10 @@ declare -r TAILOG_FLASKFARM_RES=(
     "-e s#^(\[.+:\s)ERROR(/\w+\])\s(.+)\$#\1${RED}ERROR${ENDCOLOR}\2 ${RED}\3${ENDCOLOR}#M"
     "-e s#^(\[.+:\s)INFO(/\w+\])\s(.+)\$#\1${GRAY}INFO${ENDCOLOR}\2 ${GRAY}\3${ENDCOLOR}#M"
     "-e s#^(\[.+:\s)WARNING(/\w+\])\s(.+)\$#\1${YELLOW}WARNING${ENDCOLOR}\2 ${YELLOW}\3${ENDCOLOR}#M"
+    "-e s#^(\[.+[0-9]+\]\s)(DEB)\|(\s.+)\$#\1${LIGHTGRAY}\2${ENDCOLOR}|${LIGHTGRAY}\3${ENDCOLOR}#M"
+    "-e s#^(\[.+[0-9]+\]\s)(INF)\|(\s.+)\$#\1${GREEN}\2${ENDCOLOR}|${GREEN}\3${ENDCOLOR}#M"
+    "-e s#^(\[.+[0-9]+\]\s)(WAR)\|(\s.+)\$#\1${YELLOW}\2${ENDCOLOR}|${YELLOW}\3${ENDCOLOR}#M"
+    "-e s#^(\[.+[0-9]+\]\s)(ERR)\|(\s.+)\$#\1${RED}\2${ENDCOLOR}|${RED}\3${ENDCOLOR}#M"
 )
 declare -r TAILOG_RCLONE_LOGS=(
     "${RCLONE_LOG_FILE}"
