@@ -272,8 +272,8 @@ rclone_manager(){
             ;;
         "backup")
             flags=("copy" "${RCLONE_BACKUP_SOURCE}" "${RCLONE_BACKUP_TARGET}" ${RCLONE_FLAGS_BACKUP[@]})
-            last -f /var/log/btmp | tee ${HOME}/logs/ssh.failed.log
-            last -f /var/log/wtmp | tee ${HOME}/logs/ssh.success.log
+            last -f /var/log/btmp | tee ${LOG_DIR}/ssh.failed.log
+            last -f /var/log/wtmp | tee ${LOG_DIR}/ssh.success.log
             rclone_exec "$(printf "%s\n" "${flags[@]}")"
             ;;
         "rc-start-post")

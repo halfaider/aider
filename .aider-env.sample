@@ -23,7 +23,7 @@ declare -r INIT_STARTUP="
 "
 
 # aider-log
-declare -r LOG_DIR="${HOME}/logs/"
+declare -r LOG_DIR="${HOME}/logs"
 declare -r LOG_FILE="${LOG_DIR}/${NAME%.*}.log"
 declare -ru LOG_LEVEL="debug"
 
@@ -80,9 +80,11 @@ declare -r RCLONE_FLAGS_RCD="rcd
 --rc-web-gui-update
 --rc-web-gui-no-open-browser
 --use-mmap
---filter-from=${RCLONE_RC_FILTER_FILE}"
+--filter-from=${RCLONE_RC_FILTER_FILE}
+--ignore-case"
 declare -r RCLONE_FLAGS_BACKUP="--create-empty-src-dirs
 --filter-from=${RCLONE_FILTER_BACKUP}
+--ignore-case
 --ignore-checksum
 --ignore-size
 --progress"
