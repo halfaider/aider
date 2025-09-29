@@ -51,7 +51,7 @@ start_pre(){
 
 stop_post(){
     local elapsed_time
-    log D "걸린 시간   : $(echo "scale=3; $(date +%s.%3N) - ${COMMAND_START_TIME}" | bc) 초"
+    log D "걸린 시간   : $(echo "scale=3; $(date +%s.%3N) - ${COMMAND_START_TIME}" | bc) 초 ($(echo "${@}"))"
 }
 
 check_root(){

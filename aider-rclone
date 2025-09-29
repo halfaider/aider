@@ -177,6 +177,27 @@ rclone_rc_job_list_detailed(){
     done < <(rclone_rc_job_list | jq ".jobids[]")
 }
 
+rclone_servcie_container_restart(){
+    # 도커 시작전에 도커 명령어를 실행하면 먹통
+    # Path 유닛의 PathModified로 트리거를 설정 후 After=docker.service로 설정한 서비스를 실행
+    # 1. rclonre.remote.serivce가 신호용 파일을 변경
+    # 2. rclone.container.restart.path에서 신호용 파일의 변경을 감지하고 rclone.container.restart.service를 실행
+    # 3. rclone.container.restart.service는 After=docker.service 설정에 따라 도커 서비스가 온라인 되면 실행
+    case "${1}" in
+        "mark")
+            /usr/bin/touch /tmp/rclone.remote.ready
+            ;;
+        "restart")
+            for container in ${RCLONE_RESTART_CONTAINERS}; do
+                if docker inspect -f '{{.State.Running}}' "$container" &> /dev/null; then
+                    log I "Restart container: ${container}"
+                    docker restart "${container}"
+                fi
+            done
+            ;;
+    esac
+}
+
 rclone_service_start_post(){
     log I "Start post..."
     max_counter=60
@@ -193,6 +214,7 @@ rclone_service_start_post(){
             sleep 1
         fi
     done
+    rclone_servcie_container_restart mark
 }
 
 rclone_service_stop_post(){
@@ -287,6 +309,9 @@ rclone_manager(){
         "rcd")
             # aider.sh rclone rcd
             rclone_rcd
+            ;;
+        "restart-container")
+            rclone_servcie_container_restart restart
             ;;
         "fscache")
             # This clears the fs cache. This is where remotes created from backends are cached for a short while to make repeated rc calls more efficient.

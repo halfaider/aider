@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+
+plex_get_sections(){
+    sections=$(curl -H "accept: application/json" "${PLEX_URL}/library/sections/?X-Plex-Token=${PLEX_TOKEN}")
+    echo "${sections}" | jq -r
+}
+
 plex_get_section_by_dir(){
     local sections path
     sections=$(curl -H "accept: application/json" "${PLEX_URL}/library/sections/?X-Plex-Token=${PLEX_TOKEN}")
@@ -112,6 +118,9 @@ plex_manager(){
             ;;
         "backup")
             plex_backup
+            ;;
+        "section")
+            plex_get_sections
             ;;
     esac
 }
