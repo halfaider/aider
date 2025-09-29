@@ -24,9 +24,9 @@ tailog_manager(){
 
     if [[ ${#target_logs[@]} -gt 0 ]]; then
         if [[ ${#target_res[@]} -gt 0 ]]; then
-            tail -Fqn "${TAILOG_LINES}" ${target_logs[@]} | sed --unbuffered -r "${target_res[@]}"
+            tail -Fqn "${TAILOG_LINES}" "${target_logs[@]}" | sed --unbuffered -r "${target_res[@]}"
         else
-            tail -Fqn "${TAILOG_LINES}" ${target_logs[@]}
+            tail -Fqn "${TAILOG_LINES}" "${target_logs[@]}"
         fi
     else
         echo -e "No logs to tail..."
