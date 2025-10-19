@@ -111,7 +111,7 @@ case "${1}" in
         log I "${result}"
         discord_send "${result}"
         ;;
-    init|geoip|rclone|tailog|plex|dsm|move)
+    init|geoip|rclone|tailog|plex|dsm|move|docker)
         mod=${1}
         shift 1
         source ${EXE_DIR}/aider-${mod}
