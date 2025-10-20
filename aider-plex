@@ -71,32 +71,6 @@ plex_ramdisk(){
     done
 }
 
-plex_backup(){
-    README="""
-    ~/backup/plex/Databases
-        /com.plexapp.plugins.library.db-2025-03-08
-        /com.plexapp.plugins.library.db-2025-03-11
-        /com.plexapp.plugins.library.db.0.gz
-        /com.plexapp.plugins.library.db.1.gz
-    """
-    for backup_dir in "${PLEX_DB_BACKUPS[@]}"; do
-        backup_targets=("${backup_dir}"/com.plexapp.plugins.library.db-*)
-        IFS=$'\n' sorted=($(sort -r <<<"${backup_targets[*]}"))
-        unset IFS
-        for idx in $( seq 0 $((${#sorted[@]} - 1)) ); do
-            [[ ! -f "${sorted[$idx]}" ]] && continue
-            if [[ ${idx} -gt 1 ]]; then
-                echo "rm: ${sorted[$idx]}"
-                rm -f "${sorted[$idx]}"
-                continue
-            fi
-            cd ${backup_dir}
-            echo "tar: ${PLEX_DB_FILE}.${idx}.tar.gz < ${sorted[$idx]}"
-            tar -zcvf "${PLEX_DB_FILE}.${idx}.tar.gz" "$(basename "${sorted[$idx]}")"
-        done
-    done
-}
-
 plex_manager(){
     case "${1}" in
         "scan")
@@ -115,9 +89,6 @@ plex_manager(){
             ;;
         "ramdisk")
             plex_ramdisk
-            ;;
-        "backup")
-            plex_backup
             ;;
         "section")
             plex_get_sections

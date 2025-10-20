@@ -25,6 +25,7 @@ shopt -s extglob
 ## Default
 declare -r NAME=$(basename -- "${0}")
 declare -r EXE_DIR=$(dirname -- "${0}")
+declare COMMAND_START_TIME=""
 
 ## Import
 source ${EXE_DIR}/.aider-env
