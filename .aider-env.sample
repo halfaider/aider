@@ -61,9 +61,8 @@ kavita
 declare -r RCLONE_BACKUP_LIST_FILE_PREFIX="rclone-backup-"
 declare -r RCLONE_BACKUP_LIST_FILE_EXT="txt"
 declare -r RCLONE_BACKUP_LIST_DIR="${HOME}"/.config/rclone
-declare -r RCLONE_BACKUP_REMOTE_PATH=my_remote:/backup/${HOSTNAME}
 declare -r RCLONE_BACKUP_TEMP_DIR=/tmp/backup
-declare -r RCLONE_BACKUP_ROTATION_REMOTE=3
+declare -r RCLONE_BACKUP_ROTATION_REMOTE=5
 declare -r RCLONE_BACKUP_ARCHIVE_FILE_PREFIX="${RCLONE_BACKUP_LIST_FILE_PREFIX}"
 declare -r RCLONE_BACKUP_FLAGS="--create-empty-src-dirs
 --ignore-case

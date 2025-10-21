@@ -149,3 +149,4 @@ plex scan \"{/folder/to/be/scanned}\"
         ;;
 esac
 stop_post "${args}"
+shopt -u extglob

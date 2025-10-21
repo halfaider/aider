@@ -334,7 +334,15 @@ rclone_backup(){
         return 1
     fi
 
+    if [[ -z "${2}" ]]; then
+        log E "리모트 대상을 지정하세요."
+        return 1
+    fi
+
     local target_profile="${1}"
+    local target_remote_path="${2}"
+
+    target_remote_path="${target_remote_path%%+(/)}"
 
     log I "백업 시작 프로필: ${target_profile}"
     local backup_list_files=()
@@ -362,7 +370,7 @@ rclone_backup(){
         local timestamp=$(date +%Y%m%d-%H%M%S)
         local archive_file_name="${RCLONE_BACKUP_ARCHIVE_FILE_PREFIX}${target_profile}-${timestamp}.tar.gz"
         local archive_file_path="${RCLONE_BACKUP_TEMP_DIR}/${archive_file_name}"
-        local remote_target_path="${RCLONE_BACKUP_REMOTE_PATH}/${target_profile}/"
+        local remote_target_path="${target_remote_path}/${target_profile}/"
 
         shopt -s nullglob
         files_to_archive=()
@@ -472,7 +480,7 @@ rclone_manager(){
                     if [[ -n "${!pre_script}" ]]; then
                         rclone_backup_script ${pre_script}
                     fi
-                    rclone_backup "${1}"
+                    rclone_backup "${1}" "${2}"
                     if [[ -n "${!post_script}" ]]; then
                         rclone_backup_script ${post_script}
                     fi
