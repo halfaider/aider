@@ -467,7 +467,6 @@ rclone_manager(){
                     rclone_backup_rotation "${@}"
                     ;;
                 *)
-                    "${1}"
                     local pre_script="RCLONE_BACKUP_PRE_SCRIPT_${1^^}"
                     local post_script="RCLONE_BACKUP_POST_SCRIPT_${1^^}"
                     if [[ -n "${!pre_script}" ]]; then
