@@ -28,6 +28,7 @@ declare -r EXE_DIR=$(dirname -- "${0}")
 declare COMMAND_START_TIME=""
 
 ## Import
+source ${EXE_DIR}/.aider-env.default
 source ${EXE_DIR}/.aider-env
 source ${EXE_DIR}/aider-log
 source ${EXE_DIR}/aider-discord

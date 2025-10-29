@@ -9,13 +9,29 @@ log_get_now(){
     echo "$(TZ='Asia/Seoul' date '+%Y-%m-%dT%T%z')"
 }
 
+log_say(){
+    local -u logger_level=${LOGGING_LEVEL[${1}]}
+    if [[ -z ${3} ]]; then
+        printf "[$(log_get_now)][%8s] %s\n" "${logger_level}" "${2}" 2>&1
+    else
+        printf "[$(log_get_now)][%8s] %s\n" "${logger_level}" "${2}" 2>&1 | tee -a ${3}
+    fi
+}
+
 log_log(){
-    local l=${LOGGING_LEVEL[${1}]}
-    # 입력 받은 로그 레벨의 PRIORITY 순위가 지정되어 있지 않으면 return 0
-    [[ ${LOGGING_PRIORITY[${l}]} ]] || return 0
-    # 입력 받은 로그 레벨의 PRIORITY 순위가 기본 LOG_LEVEL의 PRIORITY 보다 낮으면 return 0
-    (( ${LOGGING_PRIORITY[${l}]} < ${LOGGING_PRIORITY[${LOG_LEVEL:-INFO}]} )) && return 0
-    # 표준 출력 및 파일에 로그를 기록
-    #printf "[$(log_get_now)][%8s] %s\n" "${l}" "${2}" 2>&1 | tee -a ${LOG_FILE} >/dev/null
-    printf "[$(log_get_now)][%8s] %s\n" "${l}" "${2}" 2>&1 | tee -a ${LOG_FILE}
+    local -u logger_level=${LOGGING_LEVEL[${1}]}
+    local -u setting_level=${LOG_LEVEL}
+    local priority=${LOGGING_PRIORITY[${logger_level}]}
+    local setting_priority=${LOGGING_PRIORITY[${setting_level}]}
+
+    if [[ -z ${priority} ]]; then
+        log_say W "Unknown log level: ${1}, set to DEBUG" "${LOG_FILE}"
+        priority=0
+    fi
+    if [[ -z ${setting_priority} ]]; then
+        log_say W "Unknown log level: ${LOG_LEVEL}, set to ERROR" "${LOG_FILE}"
+        setting_priority=3
+    fi
+    (( priority < setting_priority )) && return 0
+    log_say "${1}" "${2}" "${LOG_FILE}"
 }
