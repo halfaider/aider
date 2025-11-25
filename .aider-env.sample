@@ -1,22 +1,35 @@
 #!/usr/bin/env bash
 
-# Copy .aider-env.sample to .aider-env and modify it.
-# Load settings in the following order:
-#   1. Default settings (.aider-env.default)
-#   2. User settings (.aider-env)
-# .aider-env overrides .aider-env.default settings.
+# 사용자 환경 변수 설정
+# =================
+# 파생 변수가 자동으로 설정되는 것을 막으려면 변수를 읽기 전용으로 선언
 
-DISCORD_WEBHOOK="https://discord.com/api/webhooks/..."
-INIT_CRON_JOBS="@reboot ${HOME}/bin/aider/aider init startup
-#52 8 */3 * * ${HOME}/bin/aider/aider rclone backup general"
-INIT_TOTAL_FOLDERS=983500
-INIT_STARTUP="ls ${HOME}
-ls /tmp"
-LOG_DIR="${HOME}/logs"
-LOG_FILE="${LOG_DIR}/${NAME%.*}.log"
-LOG_LEVEL="DEBUG"
-TAILOG_NGINX_LOGS=(${LOG_DIR}/nginx/*.log)
-TAILOG_NGINX_RES=(
+declare -r HOME=/home/ubuntu
+declare -r PUID=1001
+declare -r PGID=1001
+declare -r DISCORD_WEBHOOK="https://discord.com/api/webhooks/..."
+declare -ar INIT_CRON_JOBS=(
+    "@reboot ${HOME}/bin/aider/aider init startup"
+    "15 */6 * * * ${HOME}/bin/aider/aider traffic"
+)
+declare -r INIT_TOTAL_FOLDERS=983500
+declare -ar INIT_STARTUP=(
+    "${HOME}/bin/aider/aider init max-watches"
+)
+declare -r LOG_DIR="${HOME}/logs"
+declare -r LOG_FILE="${LOG_DIR}/${NAME%.*}.log"
+declare -r LOG_LEVEL="DEBUG"
+declare -ar TAILOG_NGINX_LOGS=(${LOG_DIR}/nginx/*.log)
+declare -ar TAILOG_NGINX_RES=(
     "${TAILOG_NGINX_RES[@]}"
-    "sed pattern here"
+    "Your sed pattern here..."
+)
+declare -ir RCLONE_BACKUP_ROTATION_REMOTE=5
+declare -ar RCLONE_BACKUP_PRE_SCRIPT_PLEX=(
+    "${HOME}/bin/aider/aider rclone backup rotate 2 ${HOME}/backup/plex/Databases/com.plexapp.plugins.library.db"-*
+    "${HOME}/bin/aider/aider rclone backup rotate 2 ${HOME}/backup/plex/Databases/com.plexapp.plugins.library.blobs.db"-*
+)
+declare -ar RCLONE_BACKUP_PRE_SCRIPT_GENERAL=(
+    "${HOME}/bin/aider/aider rclone backup ssh"
+    "${HOME}/bin/aider/aider rclone backup rotate 2 ${HOME}/docker/data/kavita/backups"/*
 )

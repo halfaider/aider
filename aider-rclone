@@ -25,7 +25,7 @@ rclone_exec(){
     #    echo "[${flag}]"
     #done
 
-    result=$(${RCLONE}  ${RCLONE_FLAGS_DEFAULT[@]} "${flags[@]}")
+    result=$(${RCLONE} ${RCLONE_FLAGS_DEFAULT[@]} "${flags[@]}")
     exit_code=${?}
     echo "${result}"
     return ${exit_code}
@@ -180,7 +180,7 @@ rclone_rc_job_list_detailed(){
 rclone_servcie_container_restart(){
     # 도커 시작전에 도커 명령어를 실행하면 먹통
     # Path 유닛의 PathModified로 트리거를 설정 후 After=docker.service로 설정한 서비스를 실행
-    # 1. rclonre.remote.serivce가 신호용 파일을 변경
+    # 1. rclone.remote.serivce가 신호용 파일을 변경
     # 2. rclone.container.restart.path에서 신호용 파일의 변경을 감지하고 rclone.container.restart.service를 실행
     # 3. rclone.container.restart.service는 After=docker.service 설정에 따라 도커 서비스가 온라인 되면 실행
     case "${1}" in
@@ -366,7 +366,7 @@ rclone_backup(){
     fi
 
     for list_file in "${backup_list_files[@]}"; do
-        log D "백업 대상 목록 파일:  ${target}"
+        log D "백업 대상 목록 파일: ${list_file}"
         local timestamp=$(date +%Y%m%d-%H%M%S)
         local archive_file_name="${RCLONE_BACKUP_ARCHIVE_FILE_PREFIX}${target_profile}-${timestamp}.tar.gz"
         local archive_file_path="${RCLONE_BACKUP_TEMP_DIR}/${archive_file_name}"
@@ -404,6 +404,10 @@ rclone_manager(){
     case "${1}" in
         "metadata")
             shift 1
+            if [[ -z "${1}" ]]; then
+                log E "리모트를 지정하세요: aider rclone metadata remote:"
+                return 1
+            fi
             result="$(rclone_rc_vfs_stats ${1})"
             log I "Rclone metadata in memory : $(printf "${result}" | jq -c '.metadataCache')"
             printf "%s" "${result}" | jq -c '.metadataCache'
@@ -447,10 +451,18 @@ rclone_manager(){
             ;;
         "rc-mount")
             shift 1
+            if [[ -z "${1}" ]] || [[ -z "${2}" ]]; then
+                log E "사용법: aider rclone rc-mount remote: /path/to/mount"
+                return 1
+            fi
             rclone_rc_mount "${1}" "${2}"
             ;;
         "rc-unmount")
             shift 1
+            if [[ -z "${1}" ]]; then
+                log E "사용법: aider rclone rc-unmount /path/to/mount"
+                return 1
+            fi
             rclone_rc_unmount "${1}"
             ;;
         "rc-unmount-all")
@@ -465,10 +477,17 @@ rclone_manager(){
             ;;
         "backup")
             shift 1
+            if [[ -z "${1}" ]]; then
+                log E "사용법: aider rclone backup ssh"
+                log E "사용법: aider rclone backup rotate 2 /backup/file"
+                log E "사용법: aider rclone backup 프로필 [백업경로]"
+                return 1
+            fi
             case "${1}" in
                 "ssh")
-                    last -f /var/log/btmp | tee ${LOG_DIR}/ssh.failed.log
-                    last -f /var/log/wtmp | tee ${LOG_DIR}/ssh.success.log
+                    IFS="|" read -a path < <(parse_filename "${LOG_FILE}")
+                    last -f /var/log/btmp | tee "${path[0]}/ssh.failed.log"
+                    last -f /var/log/wtmp | tee "${path[0]}/ssh.success.log"
                     ;;
                 "rotate")
                     shift 1

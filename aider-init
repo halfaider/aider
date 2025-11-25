@@ -56,11 +56,12 @@ init_manager(){
             ;;
         startup)
             shift 1
-            while read -r line; do
+            for line in "${INIT_STARTUP[@]}"; do
+                echo ${line}
                 if [[ ! -z ${line} ]]; then
                     eval ${line}
                 fi
-            done < <(printf "%s\n" "${INIT_STARTUP}")
+            done
             ;;
         *)
             log E "알 수 없는 명령어: ${1}"

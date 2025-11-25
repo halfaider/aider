@@ -28,8 +28,16 @@ declare -r EXE_DIR=$(dirname -- "${0}")
 declare COMMAND_START_TIME=""
 
 ## Import
-source ${EXE_DIR}/.aider-env.default
-source ${EXE_DIR}/.aider-env
+source "${EXE_DIR}/.aider-env.default"
+source "${EXE_DIR}/.aider-env"
+for cmd in "${_DEFERRED_VARS[@]}"; do
+    var=$(echo "${cmd}" | sed -E 's/^(declare -[a-z]* )?([a-zA-Z0-9_]+)=.*$/\2/')
+    if declare =p "${var}" &> /dev/null | grep -q "readonly"; then
+        continue
+    fi
+    eval "${cmd}" > /dev/null 2>&1
+done
+unset _DEFERRED_VARS
 source ${EXE_DIR}/aider-log
 source ${EXE_DIR}/aider-discord
 
