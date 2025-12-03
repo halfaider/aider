@@ -204,7 +204,7 @@ rclone_service_start_post(){
     for counter in $(seq 1 ${max_counter}); do
         if rclone_exec "$(rclone_flags_rc "rc/noop")" 2>&1 >/dev/null ; then
             log D "Rclone RC server is ready..."
-            for mount in ${RCLONE_MOUNTS}; do
+            for mount in "${RCLONE_MOUNTS[@]}"; do
                 log I "${mount}"
                 rclone_rc_mount "${mount%%:*}:" "${mount##*:}"
             done
@@ -219,7 +219,7 @@ rclone_service_start_post(){
 
 rclone_service_stop_post(){
     log I "Stop post..."
-    for mount in ${RCLONE_MOUNTS}; do
+    for mount in "${RCLONE_MOUNTS[@]}"; do
         umount -vl "${mount##*:}"
     done
 }
