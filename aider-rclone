@@ -25,7 +25,7 @@ rclone_exec(){
     #    echo "[${flag}]"
     #done
 
-    result=$(${RCLONE} ${RCLONE_FLAGS_DEFAULT[@]} "${flags[@]}")
+    result=$(${RCLONE} ${RCLONE_FLAGS_DEFAULT[@]} ${flags[@]})
     exit_code=${?}
     echo "${result}"
     return ${exit_code}
