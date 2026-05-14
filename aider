@@ -115,13 +115,7 @@ case "${1}" in
         shift 1
         discord_send "${@}"
         ;;
-    traffic)
-        source ${EXE_DIR}/aider-traffic
-        result="$(traffic_this_month)"
-        log I "${result}"
-        discord_send "${result}"
-        ;;
-    init|geoip|rclone|tailog|plex|dsm|move|docker)
+    init|geoip|rclone|tailog|plex|dsm|move|docker|traffic)
         mod=${1}
         shift 1
         source ${EXE_DIR}/aider-${mod}
