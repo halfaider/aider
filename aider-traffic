@@ -73,8 +73,11 @@ unblock_output() {
 check(){
     local threshold_bytes=$(to_bytes "${TRAFFIC_THRESHOLD}")
 
-    if [[ -z "${threshold_bytes}" || "${threshold_bytes}" == "0" ]]; then
-        log E "TRAFFIC_THRESHOLD 형식이 올바르지 않습니다: ${TRAFFIC_THRESHOLD} (예: 500GB, 1.5TB)."
+    local is_unlimited=false
+    if [[ "${TRAFFIC_THRESHOLD,,}" == "0" || "${TRAFFIC_THRESHOLD,,}" == "infinity" || "${TRAFFIC_THRESHOLD,,}" == "unlimited" ]]; then
+        is_unlimited=true
+    elif [[ -z "${threshold_bytes}" || "${threshold_bytes}" == "0" ]]; then
+        log E "TRAFFIC_THRESHOLD 형식이 올바르지 않습니다: ${TRAFFIC_THRESHOLD} (예: 500GB, 1.5TB, 0, unlimited)."
         return 1
     fi
 
@@ -104,6 +107,11 @@ check(){
     stat=$(printf "%04d-%02d | rx: %s | tx: %s\n" "${y}" "${m}" "${rx_human}" "${tx_human}")
     log I "${stat}"
     discord_send "${stat}"
+
+    if [[ "${is_unlimited}" == true ]]; then
+        unblock_output
+        return 0
+    fi
 
     local state_file="${TRAFFIC_STATE_FILE}_${curr_y}_${curr_m}"
     local last_alerted_percent=0
