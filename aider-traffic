@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+
 human() {
     awk -v b="${1}" 'BEGIN {
         if (b >= 1099511627776) printf "%.2f TiB\n", b / 1099511627776
@@ -10,13 +11,14 @@ human() {
     }'
 }
 
+
 to_bytes() {
     echo "${1}" | awk '
     {
         val = toupper($0)
         num = val; gsub(/[A-Z ]+/, "", num)
         unit = val; gsub(/[0-9. ]+/, "", unit)
-        
+
         # Base-2 (IEC 표준 - 1024 단위)
         if (unit == "TIB") num *= 1099511627776
         else if (unit == "GIB") num *= 1073741824
@@ -27,16 +29,73 @@ to_bytes() {
         else if (unit == "GB" || unit == "G") num *= 1000000000
         else if (unit == "MB" || unit == "M") num *= 1000000
         else if (unit == "KB" || unit == "K") num *= 1000
-        
+
         printf "%.0f\n", num
     }'
 }
+
+
+get_stat_embed() {
+    local date_val=$(echo "${1}" | tr -d '\n\r"')
+    local rx_val=$(echo "${2}" | tr -d '\n\r"')
+    local tx_val=$(echo "${3}" | tr -d '\n\r"')
+    local timestamp=$(echo "${4}" | tr -d '\n\r"')
+
+    cat <<EOF
+{
+  "content": "",
+  "username": "${NAME}@$(hostname)",
+  "embeds": [
+    {
+      "title": "🌐 트래픽 사용량",
+      "description": "**수신**\n# ${rx_val}\n**발신**\n# ${tx_val}",
+      "color": 4320097,
+      "fields": [
+        {
+          "name": "측정 월",
+          "value": "${date_val}",
+          "inline": true
+        }
+      ],
+      "timestamp": "${timestamp}",
+      "footer": {
+        "text": "vnStat"
+      }
+    }
+  ]
+}
+EOF
+}
+
+
+get_warning_embed() {
+    local msg=$(echo "${1}" | tr -d '\n\r"')
+    local timestamp=$(date +"%Y-%m-%dT%H:%M:%S%:z")
+    cat <<EOF
+{
+  "content": "@everyone",
+  "username": "${NAME}@$(hostname)",
+  "embeds": [
+    {
+      "title": "🚨 트래픽 경고",
+      "description": "${msg}",
+      "color": 13993533,
+      "timestamp": "${timestamp}",
+      "footer": {
+        "text": "vnStat"
+      }
+    }
+  ]
+}
+EOF
+}
+
 
 block_output() {
     if ! iptables -C OUTPUT -j DROP 2>/dev/null; then
         msg="아웃바운드 차단을 설정했습니다."
         log I "${msg}"
-        discord_send "@everyone ${msg}"
+        discord_send -j "$(get_warning_embed "${msg}")"
 
         local ports
         ports=$(IFS=,; echo "${TRAFFIC_ALLOWED_PORTS[*]}")
@@ -50,6 +109,7 @@ block_output() {
         iptables -A OUTPUT -j DROP
     fi
 }
+
 
 unblock_output() {
     if iptables -C OUTPUT -j DROP 2>/dev/null; then
@@ -66,9 +126,10 @@ unblock_output() {
         fi
         msg="아웃바운드 차단이 해제되었습니다."
         log I "${msg}"
-        discord_send "@everyone ${msg}"
+        discord_send -j "$(get_warning_embed "${msg}")"
     fi
 }
+
 
 check(){
     local threshold_bytes=$(to_bytes "${TRAFFIC_THRESHOLD}")
@@ -86,18 +147,19 @@ check(){
 
     local parsed=$(TZ=UTC vnstat -m --json -i "${TRAFFIC_INTERFACE}" | jq -r '.interfaces[0].traffic.month[-1] | "\(.tx) \(.rx) \(.date.year) \(.date.month)"')
     read -r tx rx y m <<< "${parsed}"
+    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
 
     if [[ "${y}" != "${curr_y}" || "${m}" != "${curr_m}" ]]; then
         msg="최근 기록(${y}-${m})이 이번 달(${curr_y}-${curr_m})과 일치하지 않습니다."
         log E "${msg}"
-        discord_send "@everyone ${msg}"
+        discord_send -j "$(get_warning_embed "${msg}")"
         return 1
     fi
 
     if [[ ! "${tx}" =~ ^[0-9]+$ ]] || [[ ! "${rx}" =~ ^[0-9]+$ ]]; then
         msg="tx 또는 rx 값이 올바른 숫자가 아닙니다. (tx: ${tx}, rx: ${rx})"
         log E "${msg}"
-        discord_send "@everyone ${msg}"
+        discord_send -j "$(get_warning_embed "${msg}")"
         return 1
     fi
 
@@ -106,7 +168,7 @@ check(){
 
     stat=$(printf "%04d-%02d | rx: %s | tx: %s\n" "${y}" "${m}" "${rx_human}" "${tx_human}")
     log I "${stat}"
-    discord_send "${stat}"
+    discord_send -j "$(get_stat_embed "$(printf "%04d-%02d" "${y}" "${m}")" "${rx_human}" "${tx_human}" "${timestamp}")"
 
     if [[ "${is_unlimited}" == true ]]; then
         unblock_output
@@ -126,9 +188,9 @@ check(){
             fi
 
             local limit_human=$(human ${limit_bytes})
-            msg="현재 전송량(${tx_human})이 허용량의 ${percent}%(${limit_human})를 초과했습니다."
+            msg="현재 발신량(${tx_human})이 허용량의 ${percent}%(${limit_human})를 초과했습니다."
             log E "${msg}"
-            discord_send "@everyone ${msg}"
+            discord_send -j "$(get_warning_embed "${msg}")"
 
             echo "${percent}" > "${state_file}"
             break
@@ -138,12 +200,13 @@ check(){
     local block_limit_bytes=$(echo "${threshold_bytes} ${TRAFFIC_BLOCK_PERCENT}" | awk '{printf "%.0f", $1 * $2 / 100}')
     if (( tx >= block_limit_bytes )); then
         block_limit_bytes_human=$(human "${block_limit_bytes}")
-        log E "현재 전송량(${tx_human})이 허용량의 ${TRAFFIC_BLOCK_PERCENT}%(${block_limit_bytes_human})를 초과했습니다."
+        log E "현재 발신량(${tx_human})이 ${TRAFFIC_BLOCK_PERCENT}% 차단 임계치(${block_limit_bytes_human})를 초과했습니다."
         block_output
     else
         unblock_output
     fi
 }
+
 
 traffic_manager(){
     case "${1}" in
