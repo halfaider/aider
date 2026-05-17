@@ -24,6 +24,8 @@ declare -a TRAFFIC_ALERT_PERCENTS=(100 90 80 70 60)
 declare -i TRAFFIC_BLOCK_PERCENT=90 # 오라클 클라우드는 통신 시 발생하는 오버헤드도 전송량에 포함하므로 여유롭게 설정
 declare -a TRAFFIC_ALLOWED_PORTS=(22 8222 53)
 declare TRAFFIC_STATE_FILE="/tmp/aider_traffic_state"
+declare DISCORD_COLOR_NORMAL=39167
+declare DISCORD_COLOR_WARNING=16761600
 # aider-geoip
 declare GEOIP_DIR=
 # aider-plex

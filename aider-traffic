@@ -53,7 +53,7 @@ get_stat_embed() {
     {
       "title": "트래픽 사용량",
       "description": "${desc}",
-      "color": 4320097,
+      "color": ${DISCORD_COLOR_NORMAL},
       "fields": [
         {
           "name": "수신",
@@ -93,7 +93,7 @@ get_warning_embed() {
     {
       "title": "트래픽 경고",
       "description": "${msg}",
-      "color": 13993533,
+      "color": ${DISCORD_COLOR_WARNING},
       "timestamp": "${timestamp}",
       "footer": {
         "text": "vnStat"
