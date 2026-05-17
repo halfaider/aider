@@ -179,8 +179,8 @@ check(){
 
     stat=$(printf "%04d-%02d | rx: %s | tx: %s\n" "${y}" "${m}" "${rx_human}" "${tx_human}")
     log I "${stat}"
-    tx_percent=$(echo "${tx} ${threshold_bytes}" | awk '{printf "%.1f", $1 / $2 * 100}')")
-    discord_send -j "$(get_stat_embed "$(printf "%04d-%02d" "${y}" "${m}")" "${rx_human}" "${tx_human}" "${timestamp}" "${tx_percent}%")"
+    tx_percent="$(echo "${tx} ${threshold_bytes}" | awk '{printf "%.1f", $1 / $2 * 100}')%"
+    discord_send -j "$(get_stat_embed "$(printf "%04d년 %02d월" "${y}" "${m}")" "${rx_human}" "${tx_human}" "${timestamp}" "${tx_percent}")"
 
     if [[ "${is_unlimited}" == true ]]; then
         unblock_output
