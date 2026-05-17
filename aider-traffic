@@ -42,6 +42,9 @@ get_stat_embed() {
     local timestamp=$(echo "${4}" | tr -d '\n\r"')
     local tx_percent=$(echo "${5}" | tr -d '\n\r"')
 
+    local desc="# tx: ${tx_val}"
+    [[ -n "${tx_percent}" ]] && desc="${desc} (${tx_percent})"
+
     cat <<EOF
 {
   "content": "",
@@ -49,7 +52,7 @@ get_stat_embed() {
   "embeds": [
     {
       "title": "트래픽 사용량",
-      "description": "# tx: ${tx_val} (${tx_percent})",
+      "description": "${desc}",
       "color": 4320097,
       "fields": [
         {
@@ -179,7 +182,10 @@ check(){
 
     stat=$(printf "%04d-%02d | rx: %s | tx: %s\n" "${y}" "${m}" "${rx_human}" "${tx_human}")
     log I "${stat}"
-    tx_percent="$(echo "${tx} ${threshold_bytes}" | awk '{printf "%.1f", $1 / $2 * 100}')%"
+    local tx_percent=""
+    if [[ "${is_unlimited}" == false ]]; then
+        tx_percent="$(echo "${tx} ${threshold_bytes}" | awk '{printf "%.1f", $1 / $2 * 100}')%"
+    fi
     discord_send -j "$(get_stat_embed "$(printf "%04d년 %02d월" "${y}" "${m}")" "${rx_human}" "${tx_human}" "${timestamp}" "${tx_percent}")"
 
     if [[ "${is_unlimited}" == true ]]; then
