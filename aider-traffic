@@ -40,6 +40,7 @@ get_stat_embed() {
     local rx_val=$(echo "${2}" | tr -d '\n\r"')
     local tx_val=$(echo "${3}" | tr -d '\n\r"')
     local timestamp=$(echo "${4}" | tr -d '\n\r"')
+    local tx_percent=$(echo "${5}" | tr -d '\n\r"')
 
     cat <<EOF
 {
@@ -47,12 +48,22 @@ get_stat_embed() {
   "username": "${NAME}@$(hostname)",
   "embeds": [
     {
-      "title": "🌐 트래픽 사용량",
-      "description": "**수신**\n# ${rx_val}\n**발신**\n# ${tx_val}",
+      "title": "트래픽 사용량",
+      "description": "# tx: ${tx_val} (${tx_percent}%)",
       "color": 4320097,
       "fields": [
         {
-          "name": "측정 월",
+          "name": "수신",
+          "value": "${rx_val}",
+          "inline": true
+        },
+        {
+          "name": "발신",
+          "value": "${tx_val}",
+          "inline": true
+        },
+        {
+          "name": "기간",
           "value": "${date_val}",
           "inline": true
         }
@@ -77,7 +88,7 @@ get_warning_embed() {
   "username": "${NAME}@$(hostname)",
   "embeds": [
     {
-      "title": "🚨 트래픽 경고",
+      "title": "트래픽 경고",
       "description": "${msg}",
       "color": 13993533,
       "timestamp": "${timestamp}",
@@ -168,7 +179,7 @@ check(){
 
     stat=$(printf "%04d-%02d | rx: %s | tx: %s\n" "${y}" "${m}" "${rx_human}" "${tx_human}")
     log I "${stat}"
-    discord_send -j "$(get_stat_embed "$(printf "%04d-%02d" "${y}" "${m}")" "${rx_human}" "${tx_human}" "${timestamp}")"
+    discord_send -j "$(get_stat_embed "$(printf "%04d-%02d" "${y}" "${m}")" "${rx_human}" "${tx_human}" "${timestamp}" "$(echo "${tx} ${threshold_bytes}" | awk '{printf "%.0f", $1 / $2 * 100}')")"
 
     if [[ "${is_unlimited}" == true ]]; then
         unblock_output
