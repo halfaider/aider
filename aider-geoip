@@ -7,8 +7,9 @@ geoip_update(){
         --output-dir /home/ubuntu/geoip/ \
         --file-location ${GEOIP_DIR}/nftables-geoip/location.csv
 
+    check_root mkdir -p /etc/nftables-geoip/
     check_root cp ${GEOIP_DIR}/geoip-*.nft /etc/nftables-geoip/
-    check_root systemctl reload nftables
+    check_root nft -f /etc/nftables.conf
     discord_send "GeoIPs have been updated."
 }
 
@@ -17,6 +18,6 @@ geoip_manager(){
         "update")
             geoip_update
             ;;
-        *) log E "예시 : ${NAME} geoip [mods|update]" ;;
+        *) log E "예시 : ${NAME} geoip update" ;;
     esac
 }
