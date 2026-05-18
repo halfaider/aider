@@ -46,14 +46,14 @@ parse_threshold() {
 
 
 get_stat_embed() {
-    local date_val=$(echo "${1}" | tr -d '\n\r"')
-    local rx_val=$(echo "${2}" | tr -d '\n\r"')
-    local tx_val=$(echo "${3}" | tr -d '\n\r"')
-    local timestamp=$(echo "${4}" | tr -d '\n\r"')
-    local tx_percent=$(echo "${5}" | tr -d '\n\r"')
-    local rx_percent=$(echo "${6}" | tr -d '\n\r"')
-    local total_val=$(echo "${7}" | tr -d '\n\r"')
-    local total_percent=$(echo "${8}" | tr -d '\n\r"')
+    local date_val="${1//[$'\n\r\"']/}"
+    local rx_val="${2//[$'\n\r\"']/}"
+    local tx_val="${3//[$'\n\r\"']/}"
+    local timestamp="${4//[$'\n\r\"']/}"
+    local tx_percent="${5//[$'\n\r\"']/}"
+    local rx_percent="${6//[$'\n\r\"']/}"
+    local total_val="${7//[$'\n\r\"']/}"
+    local total_percent="${8//[$'\n\r\"']/}"
 
     local rx_pct_str=""; [[ -n "${rx_percent}" ]] && rx_pct_str="(${rx_percent})"
     local tx_pct_str=""; [[ -n "${tx_percent}" ]] && tx_pct_str="(${tx_percent})"
@@ -99,7 +99,7 @@ EOF
 
 get_alert_embed() {
     local level="${1}"
-    local msg=$(echo "${2}" | tr -d '\n\r"')
+    local msg="${2//[$'\n\r\"']/}"
     local timestamp=$(date +"%Y-%m-%dT%H:%M:%S%:z")
     
     local title=""
@@ -135,8 +135,9 @@ EOF
 
 block_traffic() {
     local changed=false
+    local cmt=(-m comment --comment "aider-traffic")
 
-    if ! iptables -C OUTPUT -j DROP -m comment --comment "aider-traffic" 2>/dev/null || ! iptables -C INPUT -j DROP -m comment --comment "aider-traffic" 2>/dev/null; then
+    if ! iptables -C OUTPUT -j DROP "${cmt[@]}" 2>/dev/null || ! iptables -C INPUT -j DROP "${cmt[@]}" 2>/dev/null; then
         changed=true
     fi
 
@@ -146,66 +147,52 @@ block_traffic() {
         discord_send -j "$(get_alert_embed "warning" "${msg}")"
     fi
 
-    if ! iptables -C OUTPUT -j DROP -m comment --comment "aider-traffic" 2>/dev/null; then
-        local ports
-        ports=$(IFS=,; echo "${TRAFFIC_ALLOWED_PORTS[*]}")
-        if [[ -n "${ports}" ]]; then
-            iptables -I OUTPUT 1 -p tcp -m multiport --sports "${ports}" -j ACCEPT -m comment --comment "aider-traffic"
-            iptables -I OUTPUT 1 -p tcp -m multiport --dports "${ports}" -j ACCEPT -m comment --comment "aider-traffic"
-            iptables -I OUTPUT 1 -p udp -m multiport --sports "${ports}" -j ACCEPT -m comment --comment "aider-traffic"
-            iptables -I OUTPUT 1 -p udp -m multiport --dports "${ports}" -j ACCEPT -m comment --comment "aider-traffic"
-        fi
-        iptables -I OUTPUT 1 -o lo -j ACCEPT -m comment --comment "aider-traffic"
-        iptables -A OUTPUT -j DROP -m comment --comment "aider-traffic"
-    fi
+    local ports
+    ports=$(IFS=,; echo "${TRAFFIC_ALLOWED_PORTS[*]}")
 
-    if ! iptables -C INPUT -j DROP -m comment --comment "aider-traffic" 2>/dev/null; then
-        local ports
-        ports=$(IFS=,; echo "${TRAFFIC_ALLOWED_PORTS[*]}")
-        if [[ -n "${ports}" ]]; then
-            iptables -I INPUT 1 -p tcp -m multiport --sports "${ports}" -j ACCEPT -m comment --comment "aider-traffic"
-            iptables -I INPUT 1 -p tcp -m multiport --dports "${ports}" -j ACCEPT -m comment --comment "aider-traffic"
-            iptables -I INPUT 1 -p udp -m multiport --sports "${ports}" -j ACCEPT -m comment --comment "aider-traffic"
-            iptables -I INPUT 1 -p udp -m multiport --dports "${ports}" -j ACCEPT -m comment --comment "aider-traffic"
+    for chain in OUTPUT INPUT; do
+        if ! iptables -C "${chain}" -j DROP "${cmt[@]}" 2>/dev/null; then
+            if [[ -n "${ports}" ]]; then
+                for proto in tcp udp; do
+                    for port_type in sports dports; do
+                        iptables -I "${chain}" 1 -p "${proto}" -m multiport --"${port_type}" "${ports}" -j ACCEPT "${cmt[@]}"
+                    done
+                done
+            fi
+
+            local lo_iface="-o"
+            [[ "${chain}" == "INPUT" ]] && lo_iface="-i"
+            iptables -I "${chain}" 1 "${lo_iface}" lo -j ACCEPT "${cmt[@]}"
+            iptables -A "${chain}" -j DROP "${cmt[@]}"
         fi
-        iptables -I INPUT 1 -i lo -j ACCEPT -m comment --comment "aider-traffic"
-        iptables -A INPUT -j DROP -m comment --comment "aider-traffic"
-    fi
+    done
 }
 
 
 unblock_traffic() {
     local changed=false
+    local cmt=(-m comment --comment "aider-traffic")
+    local ports
+    ports=$(IFS=,; echo "${TRAFFIC_ALLOWED_PORTS[*]}")
 
-    if iptables -C OUTPUT -j DROP -m comment --comment "aider-traffic" 2>/dev/null; then
-        while iptables -D OUTPUT -j DROP -m comment --comment "aider-traffic" 2>/dev/null; do :; done
+    for chain in OUTPUT INPUT; do
+        if iptables -C "${chain}" -j DROP "${cmt[@]}" 2>/dev/null; then
+            while iptables -D "${chain}" -j DROP "${cmt[@]}" 2>/dev/null; do :; done
 
-        local ports
-        ports=$(IFS=,; echo "${TRAFFIC_ALLOWED_PORTS[*]}")
-        while iptables -D OUTPUT -o lo -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
-        if [[ -n "${ports}" ]]; then
-            while iptables -D OUTPUT -p tcp -m multiport --dports "${ports}" -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
-            while iptables -D OUTPUT -p tcp -m multiport --sports "${ports}" -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
-            while iptables -D OUTPUT -p udp -m multiport --dports "${ports}" -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
-            while iptables -D OUTPUT -p udp -m multiport --sports "${ports}" -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
+            local lo_iface="-o"
+            [[ "${chain}" == "INPUT" ]] && lo_iface="-i"
+            while iptables -D "${chain}" "${lo_iface}" lo -j ACCEPT "${cmt[@]}" 2>/dev/null; do :; done
+
+            if [[ -n "${ports}" ]]; then
+                for proto in tcp udp; do
+                    for port_type in sports dports; do
+                        while iptables -D "${chain}" -p "${proto}" -m multiport --"${port_type}" "${ports}" -j ACCEPT "${cmt[@]}" 2>/dev/null; do :; done
+                    done
+                done
+            fi
+            changed=true
         fi
-        changed=true
-    fi
-
-    if iptables -C INPUT -j DROP -m comment --comment "aider-traffic" 2>/dev/null; then
-        while iptables -D INPUT -j DROP -m comment --comment "aider-traffic" 2>/dev/null; do :; done
-
-        local ports
-        ports=$(IFS=,; echo "${TRAFFIC_ALLOWED_PORTS[*]}")
-        while iptables -D INPUT -i lo -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
-        if [[ -n "${ports}" ]]; then
-            while iptables -D INPUT -p tcp -m multiport --dports "${ports}" -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
-            while iptables -D INPUT -p tcp -m multiport --sports "${ports}" -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
-            while iptables -D INPUT -p udp -m multiport --dports "${ports}" -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
-            while iptables -D INPUT -p udp -m multiport --sports "${ports}" -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
-        fi
-        changed=true
-    fi
+    done
 
     if [[ "${changed}" == true ]]; then
         msg="트래픽(인바운드/아웃바운드) 차단이 해제되었습니다."
@@ -238,7 +225,7 @@ evaluate_traffic() {
         fi
 
         if (( block_percent > 0 )); then
-            local block_limit=$(echo "${limit} ${block_percent}" | awk '{printf "%.0f", $1 * $2 / 100}')
+            local block_limit=$(( limit * block_percent / 100 ))
             if (( val >= block_limit )); then
                 EVAL_IS_BLOCKED=true
                 EVAL_BLOCK_MSG="${name} 사용량(${val_human})이 ${block_percent}% 차단 임계치를 초과했습니다."
