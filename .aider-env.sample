@@ -10,12 +10,20 @@ declare -r PGID=1001
 declare -r DISCORD_WEBHOOK="https://discord.com/api/webhooks/..."
 declare -ar INIT_CRON_JOBS=(
     "@reboot ${HOME}/bin/aider/aider init startup"
-    "15 */6 * * * ${HOME}/bin/aider/aider traffic"
+    "15,45 * * * * ${HOME}/bin/aider/aider traffic check"
 )
 declare -r INIT_TOTAL_FOLDERS=983500
 declare -ar INIT_STARTUP=(
     "${HOME}/bin/aider/aider init max-watches"
+    "${HOME}/bin/aider/aider init crontab"
 )
+
+declare -r TRAFFIC_INTERFACE="enp0s3"
+declare -r TRAFFIC_TX_THRESHOLD="10TB"
+declare -ir TRAFFIC_TX_BLOCK_PERCENT=90
+declare -ar TRAFFIC_ALERT_PERCENTS=(100 90 80 70)
+declare -ar TRAFFIC_ALLOWED_PORTS=(22 53)
+
 declare -r LOG_DIR="${HOME}/logs"
 declare -r LOG_FILE="${LOG_DIR}/${NAME%.*}.log"
 declare -r LOG_LEVEL="DEBUG"
