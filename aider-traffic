@@ -35,15 +35,35 @@ to_bytes() {
 }
 
 
+parse_threshold() {
+    local val="${1,,}"
+    if [[ "${val}" == "0" || "${val}" == "infinity" || "${val}" == "unlimited" || -z "${val}" ]]; then
+        echo "0"
+    else
+        to_bytes "${1}"
+    fi
+}
+
+
 get_stat_embed() {
     local date_val=$(echo "${1}" | tr -d '\n\r"')
     local rx_val=$(echo "${2}" | tr -d '\n\r"')
     local tx_val=$(echo "${3}" | tr -d '\n\r"')
     local timestamp=$(echo "${4}" | tr -d '\n\r"')
     local tx_percent=$(echo "${5}" | tr -d '\n\r"')
+    local rx_percent=$(echo "${6}" | tr -d '\n\r"')
+    local total_val=$(echo "${7}" | tr -d '\n\r"')
+    local total_percent=$(echo "${8}" | tr -d '\n\r"')
 
-    local desc="# tx: ${tx_val}"
-    [[ -n "${tx_percent}" ]] && desc="${desc} (${tx_percent})"
+    local rx_pct_str=""; [[ -n "${rx_percent}" ]] && rx_pct_str="(${rx_percent})"
+    local tx_pct_str=""; [[ -n "${tx_percent}" ]] && tx_pct_str="(${tx_percent})"
+    local total_pct_str=""; [[ -n "${total_percent}" ]] && total_pct_str="(${total_percent})"
+
+    local row_rx=$(printf "%-6s %10s  %-8s" "rx:" "${rx_val}" "${rx_pct_str}")
+    local row_tx=$(printf "%-6s %10s  %-8s" "tx:" "${tx_val}" "${tx_pct_str}")
+    local row_total=$(printf "%-6s %10s  %-8s" "total:" "${total_val}" "${total_pct_str}")
+
+    local desc="\`\`\`javascript\n${row_rx}\n${row_tx}\n${row_total}\n\`\`\`"
 
     cat <<EOF
 {
@@ -56,13 +76,8 @@ get_stat_embed() {
       "color": ${DISCORD_COLOR_NORMAL},
       "fields": [
         {
-          "name": "수신",
-          "value": "${rx_val}",
-          "inline": true
-        },
-        {
-          "name": "발신",
-          "value": "${tx_val}",
+          "name": "호스트",
+          "value": "$(hostname)",
           "inline": true
         },
         {
@@ -82,18 +97,31 @@ EOF
 }
 
 
-get_warning_embed() {
-    local msg=$(echo "${1}" | tr -d '\n\r"')
+get_alert_embed() {
+    local level="${1}"
+    local msg=$(echo "${2}" | tr -d '\n\r"')
     local timestamp=$(date +"%Y-%m-%dT%H:%M:%S%:z")
+    
+    local title=""
+    local color=""
+    
+    if [[ "${level}" == "warning" ]]; then
+        title="트래픽 경고"
+        color=${DISCORD_COLOR_WARNING}
+    elif [[ "${level}" == "critical" ]]; then
+        title="트래픽 차단"
+        color=${DISCORD_COLOR_CRITICAL}
+    fi
+
     cat <<EOF
 {
   "content": "@everyone",
   "username": "${NAME}@$(hostname)",
   "embeds": [
     {
-      "title": "트래픽 경고",
+      "title": "${title}",
       "description": "${msg}",
-      "color": ${DISCORD_COLOR_WARNING},
+      "color": ${color},
       "timestamp": "${timestamp}",
       "footer": {
         "text": "vnStat"
@@ -105,56 +133,127 @@ EOF
 }
 
 
-block_output() {
-    if ! iptables -C OUTPUT -j DROP 2>/dev/null; then
-        msg="아웃바운드 차단을 설정했습니다."
-        log I "${msg}"
-        discord_send -j "$(get_warning_embed "${msg}")"
+block_traffic() {
+    local changed=false
 
+    if ! iptables -C OUTPUT -j DROP -m comment --comment "aider-traffic" 2>/dev/null || ! iptables -C INPUT -j DROP -m comment --comment "aider-traffic" 2>/dev/null; then
+        changed=true
+    fi
+
+    if [[ "${changed}" == true ]]; then
+        msg="트래픽(인바운드/아웃바운드) 차단을 설정했습니다."
+        log I "${msg}"
+        discord_send -j "$(get_alert_embed "warning" "${msg}")"
+    fi
+
+    if ! iptables -C OUTPUT -j DROP -m comment --comment "aider-traffic" 2>/dev/null; then
         local ports
         ports=$(IFS=,; echo "${TRAFFIC_ALLOWED_PORTS[*]}")
         if [[ -n "${ports}" ]]; then
-            iptables -I OUTPUT 1 -p tcp -m multiport --sports "${ports}" -j ACCEPT
-            iptables -I OUTPUT 1 -p tcp -m multiport --dports "${ports}" -j ACCEPT
-            iptables -I OUTPUT 1 -p udp -m multiport --sports "${ports}" -j ACCEPT
-            iptables -I OUTPUT 1 -p udp -m multiport --dports "${ports}" -j ACCEPT
+            iptables -I OUTPUT 1 -p tcp -m multiport --sports "${ports}" -j ACCEPT -m comment --comment "aider-traffic"
+            iptables -I OUTPUT 1 -p tcp -m multiport --dports "${ports}" -j ACCEPT -m comment --comment "aider-traffic"
+            iptables -I OUTPUT 1 -p udp -m multiport --sports "${ports}" -j ACCEPT -m comment --comment "aider-traffic"
+            iptables -I OUTPUT 1 -p udp -m multiport --dports "${ports}" -j ACCEPT -m comment --comment "aider-traffic"
         fi
-        iptables -I OUTPUT 1 -o lo -j ACCEPT
-        iptables -A OUTPUT -j DROP
+        iptables -I OUTPUT 1 -o lo -j ACCEPT -m comment --comment "aider-traffic"
+        iptables -A OUTPUT -j DROP -m comment --comment "aider-traffic"
+    fi
+
+    if ! iptables -C INPUT -j DROP -m comment --comment "aider-traffic" 2>/dev/null; then
+        local ports
+        ports=$(IFS=,; echo "${TRAFFIC_ALLOWED_PORTS[*]}")
+        if [[ -n "${ports}" ]]; then
+            iptables -I INPUT 1 -p tcp -m multiport --sports "${ports}" -j ACCEPT -m comment --comment "aider-traffic"
+            iptables -I INPUT 1 -p tcp -m multiport --dports "${ports}" -j ACCEPT -m comment --comment "aider-traffic"
+            iptables -I INPUT 1 -p udp -m multiport --sports "${ports}" -j ACCEPT -m comment --comment "aider-traffic"
+            iptables -I INPUT 1 -p udp -m multiport --dports "${ports}" -j ACCEPT -m comment --comment "aider-traffic"
+        fi
+        iptables -I INPUT 1 -i lo -j ACCEPT -m comment --comment "aider-traffic"
+        iptables -A INPUT -j DROP -m comment --comment "aider-traffic"
     fi
 }
 
 
-unblock_output() {
-    if iptables -C OUTPUT -j DROP 2>/dev/null; then
-        while iptables -D OUTPUT -j DROP 2>/dev/null; do :; done
+unblock_traffic() {
+    local changed=false
+
+    if iptables -C OUTPUT -j DROP -m comment --comment "aider-traffic" 2>/dev/null; then
+        while iptables -D OUTPUT -j DROP -m comment --comment "aider-traffic" 2>/dev/null; do :; done
 
         local ports
         ports=$(IFS=,; echo "${TRAFFIC_ALLOWED_PORTS[*]}")
-        while iptables -D OUTPUT -o lo -j ACCEPT 2>/dev/null; do :; done
+        while iptables -D OUTPUT -o lo -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
         if [[ -n "${ports}" ]]; then
-            while iptables -D OUTPUT -p tcp -m multiport --dports "${ports}" -j ACCEPT 2>/dev/null; do :; done
-            while iptables -D OUTPUT -p tcp -m multiport --sports "${ports}" -j ACCEPT 2>/dev/null; do :; done
-            while iptables -D OUTPUT -p udp -m multiport --dports "${ports}" -j ACCEPT 2>/dev/null; do :; done
-            while iptables -D OUTPUT -p udp -m multiport --sports "${ports}" -j ACCEPT 2>/dev/null; do :; done
+            while iptables -D OUTPUT -p tcp -m multiport --dports "${ports}" -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
+            while iptables -D OUTPUT -p tcp -m multiport --sports "${ports}" -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
+            while iptables -D OUTPUT -p udp -m multiport --dports "${ports}" -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
+            while iptables -D OUTPUT -p udp -m multiport --sports "${ports}" -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
         fi
-        msg="아웃바운드 차단이 해제되었습니다."
+        changed=true
+    fi
+
+    if iptables -C INPUT -j DROP -m comment --comment "aider-traffic" 2>/dev/null; then
+        while iptables -D INPUT -j DROP -m comment --comment "aider-traffic" 2>/dev/null; do :; done
+
+        local ports
+        ports=$(IFS=,; echo "${TRAFFIC_ALLOWED_PORTS[*]}")
+        while iptables -D INPUT -i lo -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
+        if [[ -n "${ports}" ]]; then
+            while iptables -D INPUT -p tcp -m multiport --dports "${ports}" -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
+            while iptables -D INPUT -p tcp -m multiport --sports "${ports}" -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
+            while iptables -D INPUT -p udp -m multiport --dports "${ports}" -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
+            while iptables -D INPUT -p udp -m multiport --sports "${ports}" -j ACCEPT -m comment --comment "aider-traffic" 2>/dev/null; do :; done
+        fi
+        changed=true
+    fi
+
+    if [[ "${changed}" == true ]]; then
+        msg="트래픽(인바운드/아웃바운드) 차단이 해제되었습니다."
         log I "${msg}"
-        discord_send -j "$(get_warning_embed "${msg}")"
+        discord_send -j "$(get_alert_embed "warning" "${msg}")"
+    fi
+}
+
+
+evaluate_traffic() {
+    local name="${1}"
+    local val="${2}"
+    local limit="${3}"
+    local val_human="${4}"
+    local block_percent="${5}"
+    local percent_var_name="${6}"
+
+    if (( limit > 0 )); then
+        EVAL_IS_UNLIMITED=false
+        local pct=$(echo "${val} ${limit}" | awk '{printf "%.1f", $1 / $2 * 100}')
+
+        if [[ -n "${percent_var_name}" ]]; then
+            eval "${percent_var_name}=\"${pct}%\""
+        fi
+
+        local int_pct=${pct%.*}
+        if (( int_pct > EVAL_ALERT_PCT )); then
+            EVAL_ALERT_PCT=${int_pct}
+            EVAL_EXCEED_MSG="${name} 사용량(${val_human})이 허용량의 ${pct}%를 초과했습니다."
+        fi
+
+        local block_limit=$(echo "${limit} ${block_percent}" | awk '{printf "%.0f", $1 * $2 / 100}')
+        if (( val >= block_limit )); then
+            EVAL_IS_BLOCKED=true
+            EVAL_BLOCK_MSG="${name} 사용량(${val_human})이 ${block_percent}% 차단 임계치를 초과했습니다."
+        fi
     fi
 }
 
 
 check(){
-    local threshold_bytes=$(to_bytes "${TRAFFIC_THRESHOLD}")
+    local tx_limit=$(parse_threshold "${TRAFFIC_TX_THRESHOLD:-${TRAFFIC_THRESHOLD:-0}}")
+    local rx_limit=$(parse_threshold "${TRAFFIC_RX_THRESHOLD:-0}")
+    local total_limit=$(parse_threshold "${TRAFFIC_TOTAL_THRESHOLD:-0}")
 
-    local is_unlimited=false
-    if [[ "${TRAFFIC_THRESHOLD,,}" == "0" || "${TRAFFIC_THRESHOLD,,}" == "infinity" || "${TRAFFIC_THRESHOLD,,}" == "unlimited" ]]; then
-        is_unlimited=true
-    elif [[ -z "${threshold_bytes}" || "${threshold_bytes}" == "0" ]]; then
-        log E "TRAFFIC_THRESHOLD 형식이 올바르지 않습니다: ${TRAFFIC_THRESHOLD} (예: 500GB, 1.5TB, 0, unlimited)."
-        return 1
-    fi
+    local tx_block_pct="${TRAFFIC_TX_BLOCK_PERCENT:-${TRAFFIC_BLOCK_PERCENT:-90}}"
+    local rx_block_pct="${TRAFFIC_RX_BLOCK_PERCENT:-${TRAFFIC_BLOCK_PERCENT:-90}}"
+    local total_block_pct="${TRAFFIC_TOTAL_BLOCK_PERCENT:-${TRAFFIC_BLOCK_PERCENT:-90}}"
 
     local curr_y=$(date -u +%Y)
     local curr_m=$(date -u +%-m)
@@ -166,30 +265,43 @@ check(){
     if [[ "${y}" != "${curr_y}" || "${m}" != "${curr_m}" ]]; then
         msg="최근 기록(${y}-${m})이 이번 달(${curr_y}-${curr_m})과 일치하지 않습니다."
         log E "${msg}"
-        discord_send -j "$(get_warning_embed "${msg}")"
+        discord_send -j "$(get_alert_embed "warning" "${msg}")"
         return 1
     fi
 
     if [[ ! "${tx}" =~ ^[0-9]+$ ]] || [[ ! "${rx}" =~ ^[0-9]+$ ]]; then
         msg="tx 또는 rx 값이 올바른 숫자가 아닙니다. (tx: ${tx}, rx: ${rx})"
         log E "${msg}"
-        discord_send -j "$(get_warning_embed "${msg}")"
+        discord_send -j "$(get_alert_embed "warning" "${msg}")"
         return 1
     fi
 
-    rx_human=$(human ${rx})
-    tx_human=$(human ${tx})
+    local total=$(( tx + rx ))
+    local rx_human=$(human ${rx})
+    local tx_human=$(human ${tx})
+    local total_human=$(human ${total})
 
-    stat=$(printf "%04d-%02d | rx: %s | tx: %s\n" "${y}" "${m}" "${rx_human}" "${tx_human}")
+    local stat=$(printf "%04d-%02d | rx: %s | tx: %s | total: %s\n" "${y}" "${m}" "${rx_human}" "${tx_human}" "${total_human}")
     log I "${stat}"
-    local tx_percent=""
-    if [[ "${is_unlimited}" == false ]]; then
-        tx_percent="$(echo "${tx} ${threshold_bytes}" | awk '{printf "%.1f", $1 / $2 * 100}')%"
-    fi
-    discord_send -j "$(get_stat_embed "$(printf "%04d년 %02d월" "${y}" "${m}")" "${rx_human}" "${tx_human}" "${timestamp}" "${tx_percent}")"
 
-    if [[ "${is_unlimited}" == true ]]; then
-        unblock_output
+    EVAL_IS_UNLIMITED=true
+    EVAL_ALERT_PCT=0
+    EVAL_IS_BLOCKED=false
+    EVAL_EXCEED_MSG=""
+    EVAL_BLOCK_MSG=""
+    
+    local tx_percent=""
+    local rx_percent=""
+    local total_percent=""
+
+    evaluate_traffic "tx" "${tx}" "${tx_limit}" "${tx_human}" "${tx_block_pct}" "tx_percent"
+    evaluate_traffic "rx" "${rx}" "${rx_limit}" "${rx_human}" "${rx_block_pct}" "rx_percent"
+    evaluate_traffic "total" "${total}" "${total_limit}" "${total_human}" "${total_block_pct}" "total_percent"
+
+    discord_send -j "$(get_stat_embed "$(printf "%04d년 %02d월" "${y}" "${m}")" "${rx_human}" "${tx_human}" "${timestamp}" "${tx_percent}" "${rx_percent}" "${total_human}" "${total_percent}")"
+
+    if [[ "${EVAL_IS_UNLIMITED}" == true ]]; then
+        unblock_traffic
         return 0
     fi
 
@@ -198,30 +310,24 @@ check(){
     [[ -f "${state_file}" ]] && last_alerted_percent=$(cat "${state_file}")
 
     for percent in "${TRAFFIC_ALERT_PERCENTS[@]}"; do
-        local limit_bytes=$(echo "${threshold_bytes} ${percent}" | awk '{printf "%.0f", $1 * $2 / 100}')
-        if (( tx >= limit_bytes )); then
-
+        if (( EVAL_ALERT_PCT >= percent )); then
             if (( percent <= last_alerted_percent )); then
                 break
             fi
-
-            local limit_human=$(human ${limit_bytes})
-            msg="현재 발신량(${tx_human})이 허용량의 ${percent}%(${limit_human})를 초과했습니다."
-            log E "${msg}"
-            discord_send -j "$(get_warning_embed "${msg}")"
-
+            
+            log E "${EVAL_EXCEED_MSG}"
+            discord_send -j "$(get_alert_embed "warning" "${EVAL_EXCEED_MSG}")"
             echo "${percent}" > "${state_file}"
             break
         fi
     done
 
-    local block_limit_bytes=$(echo "${threshold_bytes} ${TRAFFIC_BLOCK_PERCENT}" | awk '{printf "%.0f", $1 * $2 / 100}')
-    if (( tx >= block_limit_bytes )); then
-        block_limit_bytes_human=$(human "${block_limit_bytes}")
-        log E "현재 발신량(${tx_human})이 ${TRAFFIC_BLOCK_PERCENT}% 차단 임계치(${block_limit_bytes_human})를 초과했습니다."
-        block_output
+    if [[ "${EVAL_IS_BLOCKED}" == true ]]; then
+        log E "${EVAL_BLOCK_MSG}"
+        discord_send -j "$(get_alert_embed "critical" "${EVAL_BLOCK_MSG}")"
+        block_traffic
     else
-        unblock_output
+        unblock_traffic
     fi
 }
 
@@ -229,12 +335,12 @@ check(){
 traffic_manager(){
     case "${1}" in
         "block")
-            log I "SSH를 제외한 OUTPUT을 차단합니다."
-            block_output
+            log I "허용된 포트를 제외한 트래픽을 차단합니다."
+            block_traffic
             ;;
         "unblock")
-            log I "OUTPUT 차단을 해제합니다."
-            unblock_output
+            log I "트래픽 차단을 해제합니다."
+            unblock_traffic
             ;;
         "check")
             log I "이번 달 트래픽을 확인합니다."
