@@ -237,10 +237,12 @@ evaluate_traffic() {
             EVAL_EXCEED_MSG="${name} 사용량(${val_human})이 허용량의 ${pct}%를 초과했습니다."
         fi
 
-        local block_limit=$(echo "${limit} ${block_percent}" | awk '{printf "%.0f", $1 * $2 / 100}')
-        if (( val >= block_limit )); then
-            EVAL_IS_BLOCKED=true
-            EVAL_BLOCK_MSG="${name} 사용량(${val_human})이 ${block_percent}% 차단 임계치를 초과했습니다."
+        if (( block_percent > 0 )); then
+            local block_limit=$(echo "${limit} ${block_percent}" | awk '{printf "%.0f", $1 * $2 / 100}')
+            if (( val >= block_limit )); then
+                EVAL_IS_BLOCKED=true
+                EVAL_BLOCK_MSG="${name} 사용량(${val_human})이 ${block_percent}% 차단 임계치를 초과했습니다."
+            fi
         fi
     fi
 }
