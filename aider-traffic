@@ -55,13 +55,13 @@ get_stat_embed() {
     local total_val="${7//[$'\n\r\"']/}"
     local total_percent="${8//[$'\n\r\"']/}"
 
-    local rx_pct_str=""; [[ -n "${rx_percent}" ]] && rx_pct_str="(${rx_percent})"
-    local tx_pct_str=""; [[ -n "${tx_percent}" ]] && tx_pct_str="(${tx_percent})"
-    local total_pct_str=""; [[ -n "${total_percent}" ]] && total_pct_str="(${total_percent})"
+    local rx_pct_str=""; [[ -n "${rx_percent}" ]] && rx_pct_str="|${rx_percent}"
+    local tx_pct_str=""; [[ -n "${tx_percent}" ]] && tx_pct_str="|${tx_percent}"
+    local total_pct_str=""; [[ -n "${total_percent}" ]] && total_pct_str="|${total_percent}"
 
-    local row_rx=$(printf "%-6s %10s  %-8s" "rx:" "${rx_val}" "${rx_pct_str}")
-    local row_tx=$(printf "%-6s %10s  %-8s" "tx:" "${tx_val}" "${tx_pct_str}")
-    local row_total=$(printf "%-6s %10s  %-8s" "total:" "${total_val}" "${total_pct_str}")
+    local row_rx=$(printf "%-6s %10s  %-8s" "rx:" "${rx_val}""${rx_pct_str}")
+    local row_tx=$(printf "%-6s %10s  %-8s" "tx:" "${tx_val}""${tx_pct_str}")
+    local row_total=$(printf "%-6s %10s  %-8s" "total:" "${total_val}""${total_pct_str}")
 
     local desc="\`\`\`javascript\n${row_rx}\n${row_tx}\n${row_total}\n\`\`\`"
 
@@ -101,10 +101,10 @@ get_alert_embed() {
     local level="${1}"
     local msg="${2//[$'\n\r\"']/}"
     local timestamp=$(date +"%Y-%m-%dT%H:%M:%S%:z")
-    
+
     local title=""
     local color=""
-    
+
     if [[ "${level}" == "warning" ]]; then
         title="트래픽 경고"
         color=${DISCORD_COLOR_WARNING}
@@ -278,7 +278,7 @@ check(){
     EVAL_IS_BLOCKED=false
     EVAL_EXCEED_MSG=""
     EVAL_BLOCK_MSG=""
-    
+
     local tx_percent=""
     local rx_percent=""
     local total_percent=""
@@ -303,7 +303,7 @@ check(){
             if (( percent <= last_alerted_percent )); then
                 break
             fi
-            
+
             log E "${EVAL_EXCEED_MSG}"
             discord_send -j "$(get_alert_embed "warning" "${EVAL_EXCEED_MSG}")"
             echo "${percent}" > "${state_file}"
