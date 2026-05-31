@@ -244,8 +244,8 @@ check(){
     local rx_block_pct="${TRAFFIC_RX_BLOCK_PERCENT:-${TRAFFIC_BLOCK_PERCENT:-90}}"
     local total_block_pct="${TRAFFIC_TOTAL_BLOCK_PERCENT:-${TRAFFIC_BLOCK_PERCENT:-90}}"
 
-    local curr_y=$(date -u +%Y)
-    local curr_m=$(date -u +%-m)
+    local curr_y=$(date +%Y)
+    local curr_m=$(date +%-m)
 
     local parsed=$(TZ=UTC vnstat -m --json -i "${TRAFFIC_INTERFACE}" | jq -r '.interfaces[0].traffic.month[-1] | "\(.tx) \(.rx) \(.date.year) \(.date.month)"')
     read -r tx rx y m <<< "${parsed}"
