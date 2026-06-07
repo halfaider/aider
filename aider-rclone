@@ -376,7 +376,8 @@ rclone_backup(){
         files_to_archive=()
         while IFS= read -r line || [[ -n "${line}" ]]; do
             line="${line//$'\r'/}"
-            if [[ -z "${line}" || "${line}" =~ ^\s*# ]]; then
+            # 빈 줄, 공백만 있는 줄, 주석 줄 무시 (# 앞에 공백이 포함된 경우 포함)
+            if [[ -z "${line}" || "${line}" =~ ^[[:space:]]*$ || "${line}" =~ ^[[:space:]]*# ]]; then
                 continue
             fi
             dir_part="${line%/*}"
@@ -384,9 +385,15 @@ rclone_backup(){
             if [[ "${dir_part}" == "${file_pattern}" ]]; then
                 dir_part="."
             fi
+
+            local find_flags=("-maxdepth" "1")
+            if [[ "${file_pattern}" == *'*'* || "${file_pattern}" == *'?'* ]]; then
+                find_flags+=("-type" "f")
+            fi
+            find_flags+=("-name" "${file_pattern}" "-print0")
             while IFS= read -d '' -r found_file; do
                 files_to_archive+=("${found_file}")
-            done < <(find "${dir_part}" -maxdepth 1 -name "${file_pattern}" -print0 2>/dev/null)
+            done < <(find "${dir_part}" "${find_flags[@]}" 2>/dev/null)
         done < "${list_file}"
         shopt -u nullglob
 
