@@ -32,7 +32,8 @@ declare DISCORD_COLOR_NORMAL=9936031
 declare DISCORD_COLOR_WARNING=12745742
 declare DISCORD_COLOR_CRITICAL=15158332
 # aider-geoip
-declare GEOIP_DIR=
+declare GEOIP_DIR="/home/ubuntu/geoip"
+declare GEOIP_COUNTRIES="KR,US,JP" # 콤마(,)로 구분
 # aider-plex
 declare PLEX_MEDIA_SERVER_APPLICATION_SUPPORT_DIR=
 declare PLEX_URL="https://plex:32400"

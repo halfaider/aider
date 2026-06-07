@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 
 geoip_update(){
-    cd ${GEOIP_DIR}
+    cd ${GEOIP_DIR}/nftables-geoip
+
+    local opts=()
+    if [[ -n "${GEOIP_COUNTRIES}" ]]; then
+        opts+=(-c "${GEOIP_COUNTRIES}")
+    fi
+    opts+=(--output-dir "${GEOIP_DIR}")
+    
     python3 ${GEOIP_DIR}/nftables-geoip/nft_geoip.py \
         --download \
-        --output-dir /home/ubuntu/geoip/ \
-        --file-location ${GEOIP_DIR}/nftables-geoip/location.csv
+        "${opts[@]}"
 
-    check_root mkdir -p /etc/nftables-geoip/
-    check_root cp ${GEOIP_DIR}/geoip-*.nft /etc/nftables-geoip/
     check_root nft -f /etc/nftables.conf
     discord_send "GeoIPs have been updated."
 }

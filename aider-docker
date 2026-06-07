@@ -29,6 +29,9 @@ docker_manager(){
             echo "   ${CMD_DOCKER} compose ${COMPOSE_ARGS[*]} ${*}"
             ${CMD_DOCKER} compose "${COMPOSE_ARGS[@]}" ${@}
             ;;
+        "ps")
+            ${CMD_DOCKER} ps -a --format "table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.RunningFor}}\t{{.Image}}\t{{.Command}}"
+            ;;
         *)
             $CMD_DOCKER ${@}
             ;;
