@@ -33,6 +33,7 @@ declare DISCORD_COLOR_WARNING=12745742
 declare DISCORD_COLOR_CRITICAL=15158332
 # aider-geoip
 declare GEOIP_DIR="/home/ubuntu/geoip"
+declare GEOIP_OUTPUT_DIR="/etc/nftables/geoip"
 declare GEOIP_COUNTRIES="KR,US,JP" # 콤마(,)로 구분
 # aider-plex
 declare PLEX_MEDIA_SERVER_APPLICATION_SUPPORT_DIR=

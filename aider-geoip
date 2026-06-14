@@ -13,6 +13,8 @@ geoip_update(){
         --download \
         "${opts[@]}"
 
+    # systemd ProtectHome=true 우회를 위해 생성된 nft 파일을 GEOIP_OUTPUT_DIR 로 복사
+    check_root cp -f ${GEOIP_DIR}/*.nft "${GEOIP_OUTPUT_DIR}/"
     check_root nft -f /etc/nftables.conf
     discord_send "GeoIPs have been updated."
 }
